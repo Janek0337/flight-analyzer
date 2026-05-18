@@ -4,8 +4,8 @@ import json
 # group id określa id maszyn, które mają te same zreplikowane dane
 consumer = Consumer(
     {
-    'bootstrap.server': 'localhost:9092',
-    'group_id': 'gambling',
+    'bootstrap.servers': 'localhost:9092',
+    'group.id': 'gambling',
     'auto.offset.reset': 'earliest'
     }
 )
