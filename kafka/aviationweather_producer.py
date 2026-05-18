@@ -1,5 +1,6 @@
 import csv
 import json
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -9,16 +10,44 @@ from urllib.request import urlopen
 
 API_URL = "https://aviationweather.gov/api/data/dataserver"
 
+
 BOOTSTRAP_SERVER = "localhost:9092"
 TOPIC = "weather"
-STATIONS = "KJFK,KLAX,EPWA,EDDF"
+
+
+
+STATIONS_FILE = os.path.join(os.path.dirname(__file__), "stations.txt")
+DEFAULT_STATIONS = "KJFK,KLAX,EPWA,EDDF"
 HOURS_BEHIND_NOW = 2
 POLL_SECONDS = 60
 MOST_RECENT_MODE = "constraint"
 TIMEOUT_SECONDS = 30
 
 
+def load_stations():
+    
+    
+    try:
+        with open(STATIONS_FILE, "r", encoding="utf-8") as f:
+            content = f.read().strip()
+            if not content:
+                return DEFAULT_STATIONS
+            
+            
+            parts = []
+            for line in content.replace(',', '\n').splitlines():
+                code = line.strip()
+                if code:
+                    parts.append(code)
+            if not parts:
+                return DEFAULT_STATIONS
+            return ",".join(parts)
+    except FileNotFoundError:
+        return DEFAULT_STATIONS
+
+
 def fetch_metars(stations, hours_before_now, timeout_seconds, most_recent_mode):
+    # Przygotuj parametry zapytania do API METAR
     params = {
         "requestType": "retrieve",
         "dataSource": "metars",
@@ -39,6 +68,7 @@ def fetch_metars(stations, hours_before_now, timeout_seconds, most_recent_mode):
 
 
 def make_event(record, poll_time):
+    # Utwórz zdarzenie (słownik) do wysłania do Kafki
     event = {
         "source": "aviationweather.gov",
         "data_source": "metars",
@@ -72,6 +102,11 @@ def main():
 
     print("[+] Start Aviation Weather METAR producer")
     print(f"[+] Topic: {TOPIC}")
+    
+
+    # Wczytaj listę stacji z pliku lub użyj wartości domyślnej
+    STATIONS = load_stations()
+    print(f"[+] Stations file: {STATIONS_FILE}")
     print(f"[+] Stations: {STATIONS}")
 
     while True:
@@ -92,8 +127,10 @@ def main():
             time.sleep(POLL_SECONDS)
             continue
 
+        # Wyświetl liczbę pobranych rekordów
         print(f"[+] Fetched {len(records)} records")
 
+        # Przetwórz i wyślij każdy rekord; unikaj duplikatów przez seen_keys
         for record in records:
             key = f"{record.get('station_id')}|{record.get('observation_time')}"
             if key in seen_keys:
