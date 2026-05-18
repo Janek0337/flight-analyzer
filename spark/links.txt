@@ -1,0 +1,46 @@
+PIPELINE - ETAPY
+================
+1. Dane lotów: https://ansperformance.eu/csv/#ertdly-csv
+2. `spark/scripts/fetch_flights_batch.py` -> pobiera i rozpakowuje loty.
+3. `spark/scripts/fetch_weather_batch.py` -> pobiera pogodę.
+4. `spark/scripts/upload_to_hdfs.py` -> wrzuca CSV do HDFS.
+5. `spark/scripts/process_flights.py` i `spark/scripts/process_weather.py` -> robią agregacje.
+6. `spark/scripts/build_features.py` -> łączy loty z pogodą i zapisuje finalne features.
+7. `run_pipeline.sh` -> odpala wszystko po kolei.
+
+WYJŚCIA PRZETWARZANIA WSADOWEGO 
+
+RAW DATA (CSV + HDFS):
+- /bigdata/flight_delay/raw/flights/*.csv (2 pliki: 2025, 2026)
+- /bigdata/flight_delay/raw/weather/weather_hourly_6m_8cities.csv
+- spark/data/weather_hourly_batch.csv (kopia lokalna)
+
+AGREGACJE Z PROCESS_FLIGHTS.PY (Parquet -> HDFS):
+- /bigdata/flight_delay/processed/daily_delays: 485 wierszy, kolumny [date, total_flights, total_delay, weather_delay, industrial_delay, atc_delay, other_delay, delay_per_flight]
+- /bigdata/flight_delay/processed/monthly_delays: 16 wierszy (agregacja miesięczna)
+- /bigdata/flight_delay/processed/entity_delays: 43 wierszy (top lotniska/linie lotnicze)
+
+AGREGACJE Z PROCESS_WEATHER.PY (Parquet -> HDFS):
+- /bigdata/flight_delay/processed/weather_europe_daily: 3,672 wierszy z 8 lotnisk (EDDF, EGLL, LFPG, LIRF, LPPT, UUWW, EPWA, LEMD)
+  Kolumny: date, icao, avg_temperature, avg_humidity, avg_wind_speed, max_wind_gust
+
+FINALNE FEATURES (LEFT OUTER JOIN):
+- /bigdata/flight_delay/processed/features/daily_features_parquet: 485 wierszy
+  Kolumny: date, total_flights, total_delay, weather_delay, industrial_delay, atc_delay, other_delay, delay_per_flight, icao, avg_temperature, avg_humidity, avg_wind_speed, max_wind_gust
+
+DATA RANGE: 2025-01-01 -> 2026-04-04 
+
+WYNIK KOŃCOWY
+
+ duża baza danych (485 dni) z:
+  - Statystykami opóźnień lotów (7 kategorii)
+  - Pogodą z 8 europejskich portów lotniczych
+  - Gotowa do analiz i machine learning
+  - Format: Parquet na HDFS
+
+
+STATYSTYKI:
+- Średnie opóźnienie: ~11.9 min/lot
+- 90.5% opóźnień zmapowanych (weather, industrial, atc)
+- 9.5% niezmapowanych (other_delay)
+- Temperatura: -8°C do 35°C, avg 11.6°C

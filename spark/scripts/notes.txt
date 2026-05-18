@@ -1,0 +1,20 @@
+other_delay - krótkie wnioski
+- Obecnie ~9.5% total_delay sklasyfikowane jako "other_delay".
+- Główne niezamapowane kody: DLY_ERT_P_1 (~2.53M), DLY_ERT_O_1 (~2.12M), DLY_ERT_M_1 (~0.75M).
+- Rekomendacja: tymczasowo zostawić `other_delay` (już dodane). Jeśli trzeba pełnego rozbicia,
+  rozważyć przypisanie P/O do istniejących kategorii lub stworzyć nową kategorię.
+
+Kafka (aviation weather) - jak to działa i jak przetestować
+- Flow: `kafka/aviationweather_producer.py` pobiera METARy z aviationweather.gov i publikuje JSON do topicu `weather`.
+- Topics tworzy `kafka/init_kafka.py` (flights, weather, bets).
+- Wymagania: broker Kafka na `localhost:9092`, pakiet `confluent-kafka` (jest w requirements.txt).
+- Szybki test:
+  1) Upewnij się, że Kafka działa (z `kafka/bin/zookeeper-server-start.sh`/`kafka-server-start.sh` lub serwis systemowy).
+  2) Utwórz topicy: `.venv/bin/python kafka/init_kafka.py`
+  3) Uruchom producenta METAR: `.venv/bin/python kafka/aviationweather_producer.py` (wysyła co `POLL_SECONDS`)
+     - Możesz wysłać szybki test: `.venv/bin/python kafka/producer.py` (topic `bets`).
+  4) Odbierz wiadomości: `.venv/bin/python kafka/consumer.py` (domyślnie subskrybuje `bets`) lub
+     zmień `consumer.subscribe(['weather'])` żeby podglądać METARy.
+  5) Alternatywnie, użyj narzędzi Kafka CLI: `kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic weather --from-beginning`.
+
+Krótko: mechanizm działa lokalnie jeśli masz działający broker i `confluent-kafka` w venv; testy uruchamiasz przez uruchomienie `init_kafka.py`, producenta i konsumenta.
