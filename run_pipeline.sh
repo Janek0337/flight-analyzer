@@ -12,6 +12,7 @@ AIRPORTS_FILE="${3:-}"
 
 REQUIRED_PYTHON_MODULES=(
   pyspark
+  numpy
 )
 
 get_spark_submit_version() {
@@ -135,6 +136,11 @@ fi
 "$PYTHON_BIN" "$ROOT_DIR/spark/scripts/process_weather.py"
 "$PYTHON_BIN" "$ROOT_DIR/spark/scripts/build_features.py"
 
+# Trenujemy bazowy model liniowy i wypisujemy jego metryki na stdout.
+echo "START: Trening modelu liniowego"
+"$PYTHON_BIN" "$ROOT_DIR/spark/scripts/train_linear_model.py"
+echo "END: Trening modelu liniowego"
+
 echo "DONE: Pipeline lotow i pogody"
 echo "Wyniki sprawdzisz tutaj:"
 echo "- Lokalne loty: $ROOT_DIR/spark/data/flights"
@@ -145,3 +151,5 @@ echo "- HDFS entity delays: hdfs://nn1:9000/bigdata/flight_delay/processed/entit
 echo "- HDFS weather daily: hdfs://nn1:9000/bigdata/flight_delay/processed/weather_daily"
 echo "- HDFS weather europe daily: hdfs://nn1:9000/bigdata/flight_delay/processed/weather_europe_daily"
 echo "- HDFS final features: hdfs://nn1:9000/bigdata/flight_delay/processed/features/daily_features_parquet"
+echo "- HDFS model: hdfs://nn1:9000/bigdata/flight_delay/models/linear_delay_model"
+echo "- Metryki modelu są wypisywane wyżej podczas kroku treningu"

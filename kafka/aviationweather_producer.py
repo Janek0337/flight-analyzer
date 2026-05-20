@@ -69,12 +69,25 @@ def fetch_metars(stations, hours_before_now, timeout_seconds, most_recent_mode):
 
 def make_event(record, poll_time):
     # Utwórz zdarzenie (słownik) do wysłania do Kafki
+    observation_time = record.get("observation_time")
+    observation_date = None
+    observation_hour = None
+    if observation_time:
+        try:
+            parsed_time = datetime.fromisoformat(observation_time.replace("Z", "+00:00"))
+            observation_date = parsed_time.date().isoformat()
+            observation_hour = parsed_time.replace(minute=0, second=0, microsecond=0).isoformat()
+        except ValueError:
+            pass
+
     event = {
         "source": "aviationweather.gov",
         "data_source": "metars",
         "ingested_at": poll_time,
         "station_id": record.get("station_id"),
-        "observation_time": record.get("observation_time"),
+        "observation_time": observation_time,
+        "observation_date": observation_date,
+        "observation_hour": observation_hour,
         "raw_text": record.get("raw_text"),
         "latitude": record.get("latitude"),
         "longitude": record.get("longitude"),
@@ -90,6 +103,8 @@ def make_event(record, poll_time):
         "metar_type": record.get("metar_type"),
         "elevation_m": record.get("elevation_m"),
         "full_record": record,
+        # Ten klucz ułatwi późniejsze łączenie z tabelą cech po stacji i czasie.
+        "feature_join_key": f"{record.get('station_id')}|{observation_date or ''}|{observation_hour or ''}",
     }
     return event
 

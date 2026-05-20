@@ -39,7 +39,7 @@ flights = flights.fillna(0, subset=delay_cols).withColumn("date", to_date(col("F
 )
 
 # Trzy widoki: dzienny, miesięczny i po podmiocie.
-daily_delays = flights.groupBy("date").agg(
+daily_delays = flights.groupBy("date", "ENTITY_NAME", "ENTITY_TYPE").agg(
     spark_sum("FLT_ERT_1").alias("total_flights"),
     spark_sum("DLY_ERT_1").alias("total_delay"),
     spark_sum("weather_delay").alias("weather_delay"),
@@ -49,7 +49,7 @@ daily_delays = flights.groupBy("date").agg(
     spark_sum("FLT_ERT_1_DLY_15").alias("delayed_flights_15"),
 ).withColumn(
     "delay_per_flight", when(col("total_flights") > 0, col("total_delay") / col("total_flights")).otherwise(0)
-).orderBy("date")
+).orderBy("date", "ENTITY_NAME")
 # Obliczamy "other_delay" jako różnicę między total_delay a sumą zmapowanych komponentów.
 daily_delays = daily_delays.withColumn(
     "other_delay",
