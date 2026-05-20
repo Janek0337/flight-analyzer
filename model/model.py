@@ -55,12 +55,12 @@ def main():
     parser = argparse.ArgumentParser(description="Train a Spark regression model on flight delay data")
     parser.add_argument(
         "--input",
-        default="/bigdata/flight_delay/processed/daily_delays",
+        default="hdfs://nn1:9000/bigdata/flight_delay/processed/daily_delays",
         help="Path to the daily delays Parquet data"
     )
     parser.add_argument(
         "--output",
-        default="/bigdata/flight_delay/models/delay_regression",
+        default="hdfs://nn1:9000/bigdata/flight_delay/models/delay_regression",
         help="Path to save the trained model"
     )
     parser.add_argument(
