@@ -1,0 +1,175 @@
+Big Data Projekt
+Raport z przeglądu tematyki
+Analiza wpływu pogody na opóźnienia w ruchu lotniczym (FlightRadar API)
+08.05.2026
+Zespół 6
+Stanisław Dutkiewicz 329076
+Jan Koboska 331702
+Łukasz Jugo 331700
+Piotr Sosnowski 331739
+Szymon Baprawski 334182
+1.Omówienie tematyki
+W ramach projektu zamierzamy przeanalizować wpływ warunków meteorologicznych
+na opóźnienia w ruchu lotniczym. Planujemy skupić się głównie na ruchu w obrębie
+Europy, jednak w ramach rozszerzenia projektu bierzemy pod uwagę również dane ze
+Stanów Zjednoczonych.
+W wyniku analizy zidentyfikowaliśmy następujące czynniki pogodowe jakie mogą
+wpłynąć na opóźnienia:
+• Silny wiatr
+• Deszcz
+• Widoczność mgła
+• Śnieg i oblodzenie
+• Konieczność odlodzenia samolotu przed startem
+Ponadto mogą wystąpić również inne sytuacje, które mogą wpływać na opóźnienia:
+• Zatłoczenie przestrzeni powietrznej - duża liczba samolotów w danym sektorze
+może powodować konieczność oczekiwania na slot
+• Ograniczenia kontroli ruchu lotniczego ATC - np. zmniejszona przepustowość
+sektorów, reorganizacja ruchu.
+• Opóźnienia w obsłudze naziemnej - boarding, tankowanie, załadunek bagażu,
+catering, sprzątanie samolotu, odladzanie
+• Problemy techniczne samolotu - usterki wykryte przed lotem mogą powodować
+duże opóźnienia
+• Duże wydarzenia kulturowe – wówczas występuje więcej lotów co może wpływać
+na zatłoczenie i opóźnienia
+• Strajki – w przypadku strajku kontrolerów ruchu czy obsługi lotniska występują
+zwykle duże opóźnienia
+• Zagrożenia bezpieczeństwa - gdy na przykład wymagana jest ewakuacja lotniska
+w przypadku podejrzenia niebezpieczeństwa
+Wyróżniliśmy następujące problemy które możliwe, że trzeba będzie rozwiązać
+projektując rozwiązanie:
+• Propagacja opóźnienia jednego lotu na kolejny tym samym samolotem (efekt
+domina)
+• Większość lotów jest na czas - mniej danych do uczenia z opóźnieniami
+• Potrzeba łączenia pogody w danym miejscu z ciągle poruszającym się samolotem
+• Okazjonalne błędy czujników - potrzeba uzupełniania danych
+2.Źródła danych
+1. OpenSky Network https://opensky-network.org/
+Jest to api do śledzenia położeń samolotów na żywo oraz do 1h w tył. Pozwala nam
+określić położenie samolotu w obecnym momencie oraz w niedawnej przeszłości.
+Zalety:
+• dostęp do danych o pozycjach samolotów
+• możliwość śledzenia ruchu lotniczego w czasie rzeczywistym
+• wystarczająca liczba darmowych kredytów do ograniczonego monitorowania
+samolotów
+Wady:
+• ograniczony dostęp do danych historycznych,
+• dane nie zawsze są kompletne dla wszystkich samolotów
+2. EUROCONTROL / ANS Performance
+https://ansperformance.eu/data/
+Źródło to udostępnia dane historyczne dotyczące ruchu lotniczego w Europie. Może być
+bardzo przydatne jako baza do analizy długoterminowej, ponieważ obejmuje wiele lat
+danych i pozwala analizować ruch lotniczy w szerszej skali (od 2011 roku)
+Zalety:
+• dane historyczne obejmujące wiele lat
+• źródło skoncentrowane na Europie
+• przydatne do analizy trendów i sezonowości
+• dane pochodzą z wiarygodnego źródła branżowego.
+Wady:
+• dane mogą być bardziej zagregowane niż dane z pojedynczych lotów,
+• nie zawsze pozwalają analizować każdy konkretny lot,
+3. OurAirports https://ourairports.com/
+OurAirports to baza danych zawierająca informacje o lotniskach z całego świata. Nie
+jest to źródło danych o opóźnieniach, ale jest bardzo przydatne do łączenia danych z
+różnych systemów. Tutaj można wyciągnąć dane lotnisk (nazwy, kody ICAO i IATA) oraz
+ich współrzędne geograficzne. Będzie używany do łączenia informacji o lotach z danymi
+pogodowymi.
+Zalety:
+• baza danych, nie wymaga kredytów, nie ma ograniczeń
+• przydatne do łączenia z danymi o konkretnych lotach
+Wady:
+• dane mogą wymagać czyszczenia i sprawdzenia aktualności
+• niektóre mniejsze lotniska mogą mieć mniej kompletne informacje
+4. AviationWeather.gov
+AviationWeather.gov udostępnia dane pogodowe wykorzystywane w lotnictwie, w
+szczególności depesze METAR i TAF. Jest to ważne źródło do analizy pogody na
+lotniskach.
+Zalety:
+• umożliwia sprawdzenie aktualnych danych pogodowych na wybranym lotnisku
+(po kodzie ICAO)
+Wady:
+• ma maksymalnie 100 zapytań na minutę
+• depesza jest wydawana co 30 minut
+5. Bureau of Transportation Statistics – dane o opóźnieniach w USA
+https://www.transtats.bts.gov/ot_delay/ot_delaycause1.asp?qv52yn
+B=qn6n&20=E
+Bureau of Transportation Statistics udostępnia dane dotyczące opóźnień lotów w
+Stanach Zjednoczonych. Źródło to nie dotyczy bezpośrednio Europy, ale może być
+przydatne jako rozszerzenie projektu lub źródło porównawcze
+Zalety:
+• duża baza danych historycznych,
+• zawiera przyczyny opóźnień,
+6. Copernicus Data Space Ecosystem
+https://browser.dataspace.copernicus.eu
+Copernicus Data Space umożliwia dostęp do danych satelitarnych oraz
+środowiskowych. W kontekście projektu może być używany jako dodatkowe źródło
+danych o zjawiskach atmosferycznych i ekstremalnych warunkach pogodowych.
+Zalety:
+• możliwość uzyskania danych historycznych od 2017
+• dane wysokiej rozdzielczości dla całego świata
+• dane składzie atmosfery
+• pozwala ustalić zakres zjawisk ekstremalnych
+• dane atmosferyczne (wiatr, ciśnienie, temperatura) na różnych wysokościach
+Wady:
+• rzadka częstotliwość odświeżania
+• zachmurzenie może blokować widok zjawisk
+7. Open-Meteo https://open-meteo.com/
+Open-Meteo udostępnia dane pogodowe aktualne, historyczne oraz prognozowane.
+Jest to jedno z bardziej praktycznych źródeł do połączenia pogody z konkretną
+lokalizacją geograficzną.
+Zalety:
+• dostęp do historycznych danych meteo
+• możliwość odpytywania poprzez koordynaty geograficzne, które możemy
+• pozyskiwać np. z aktualnej pozycji samolotu
+• możliwość odpytywania o prognozę pogody dla danego obszaru
+Wady:
+• ograniczenie do 600 zapytań/min 5000/godzina i 10000/dzień
+• dane mogą być modelem pogodowym, a nie bezpośrednim pomiarem z lotniska
+• wymaga dopasowania czasu i lokalizacji do konkretnego lotu
+8. AirLabs https://airlabs.co/docs/delays
+AirLabs udostępnia API, które pozwala pobierać informacje o opóźnionych lotach
+według zadanych parametrów. Może być użyte jako pomocnicze źródło do identyfikacji
+lotów, które rzeczywiście były opóźnione.
+Zalety:
+• dane bezpośrednio związane z opóźnieniami
+• możliwość filtrowania wyników
+• wygodne API
+• przydatne do szybkiego pozyskiwania przypadków opóźnień
+Wady:
+• API zwraca głównie loty opóźnione, więc może brakować pełnego obrazu lotów
+punktualnych,
+• może prowadzić do problemu nierównowagi danych,
+• ograniczenia zależne od planu dostępu,
+• mniejsza przydatność do budowy pełnego modelu, jeśli nie mamy danych o
+lotach bez opóźnień.
+9. flightradar24 – scrapping
+Pobranie danych z strony internetowej flightradar24 może pozwolić określić położenia
+samolotów. Może być użyte do śledzenia danych lotów w czasie rzeczywistym i w
+bliskiej przeszłości. Ponadto umożliwia łatwe identyfikowanie lotów danej linii lotniczej
+czy w obrębie konkretnego portu lotniczego.
+Zalety:
+• możliwość pobierania całych danych o lotach danej linii lotniczej
+• filtrowanie wg typów samolotów
+• możliwość pobierania całych tablic odlotów/przylotów dla lotnisk
+• dane nie tylko live, ale również z bliskiej przeszłości (ok. 24h wstecz)
+Wady:
+• rozwiązanie nie jest stabilne – jest to obejście blokad flightradaru poprzez
+imitację przeglądarki
+• podczas scrapowania możemy natknąć się na blokady
+3.Wybrane narzędzia
+Dane o lotach można pobierać z FlightRadar API, a dane pogodowe z API pogodowego,
+na przykład METAR, AviationWeather albo Meteostat. Dane o lotach mogą zawierać
+m.in. numer lotu, lotnisko startowe i docelowe, planowany oraz rzeczywisty czas
+startu/lądowania, status lotu i wielkość opóźnienia. Korzystając z przedstawionych
+źródeł danych można łączyć informacje o położeniu samolotów z danymi
+atmosferycznymi w różnych miejscach na Ziemi by lepiej przewidywać opóźnienia. Do
+odbierania danych w czasie rzeczywistym można wykorzystać Apache Kafka, który
+zbiera strumienie danych o lotach i pogodzie.
+Następnie dane można przetwarzać w Apache Spark, który pozwala czyścić dane,
+łączyć informacje o lotach z pogodą, ujednolicać format czasu oraz liczyć opóźnienia.
+Dane historyczne warto przechowywać w HDFS albo Data Lake, najlepiej w formacie
+Parquet, a CSV można zostawić jako format pomocniczy do prostszej analizy i
+prezentacji.
+Do predykcji opóźnień można zastosować Spark MLlib albo klasyczne biblioteki
+Pythona, takie jak scikit-learn. Modele mogą przewidywać, czy lot będzie opóźniony
+albo szacować liczbę minut opóźnienia na podstawie pogody, lotniska, trasy, godziny
+lotu i wcześniejszych opóźnień.
