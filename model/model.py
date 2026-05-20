@@ -7,6 +7,9 @@ from pyspark.ml.regression import LinearRegression
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
 
+############################################################################
+## run using "spark-submit model/model.py while in the project directory" ##
+############################################################################
 
 def build_spark_session(app_name="Flight Delay Regression"):
     spark = SparkSession.builder.appName(app_name).getOrCreate()
