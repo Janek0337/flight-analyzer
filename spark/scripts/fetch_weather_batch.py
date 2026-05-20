@@ -15,6 +15,8 @@ from urllib.request import urlopen
 
 
 ARCHIVE_API_URL = "https://archive-api.open-meteo.com/v1/archive"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_AIRPORTS_FILE = PROJECT_ROOT / "spark" / "airports.csv"
 HOURLY_FIELDS = [
     "temperature_2m",
     "relative_humidity_2m",
@@ -47,6 +49,37 @@ DEFAULT_AIRPORTS = [
     Airport("LEMD", "Madrid Barajas", 40.4983, -3.5676),
     Airport("LIRF", "Rome Fiumicino", 41.8003, 12.2389),
     Airport("LOWW", "Vienna", 48.1103, 16.5697),
+    Airport("EBBR", "Brussels", 50.9014, 4.4844),
+    Airport("LSZH", "Zurich", 47.4647, 8.5492),
+    Airport("ESSA", "Stockholm Arlanda", 59.6519, 17.9186),
+    Airport("ENGM", "Oslo Gardermoen", 60.1939, 11.1004),
+    Airport("EKCH", "Copenhagen", 55.6181, 12.6561),
+    Airport("EFHK", "Helsinki Vantaa", 60.3172, 24.9633),
+    Airport("LPPT", "Lisbon", 38.7742, -9.1342),
+    Airport("LROP", "Bucharest Otopeni", 44.5711, 26.085),
+    Airport("LKPR", "Prague Vaclav Havel", 50.1008, 14.26),
+    Airport("LHBP", "Budapest Ferenc Liszt", 47.4394, 19.2619),
+    Airport("LGAV", "Athens", 37.9364, 23.9445),
+    Airport("EIDW", "Dublin", 53.4213, -6.2701),
+    Airport("LBSF", "Sofia", 42.6967, 23.4114),
+    Airport("LDZA", "Zagreb", 45.7429, 16.0688),
+    Airport("LJLA", "Ljubljana", 46.2237, 14.4576),
+    Airport("LZIB", "Bratislava", 48.1702, 17.2127),
+    Airport("EYVI", "Vilnius", 54.6341, 25.2858),
+    Airport("EVRA", "Riga", 56.9236, 23.9711),
+    Airport("EETN", "Tallinn", 59.4133, 24.8328),
+    Airport("LUKK", "Chisinau", 46.9277, 28.9308),
+    Airport("UKBB", "Kyiv Boryspil", 50.345, 30.8947),
+    Airport("LTFM", "Istanbul", 41.2753, 28.7519),
+    Airport("ELLX", "Luxembourg", 49.6233, 6.2044),
+    Airport("LATI", "Tirana", 41.4147, 19.7206),
+    Airport("LCLK", "Larnaca", 34.8751, 33.6249),
+    Airport("UDYZ", "Yerevan Zvartnots", 40.1473, 44.3959),
+    Airport("LQSA", "Sarajevo", 43.8246, 18.3315),
+    Airport("LYBE", "Belgrade Nikola Tesla", 44.8184, 20.3091),
+    Airport("LWSK", "Skopje", 41.9616, 21.6214),
+    Airport("LMML", "Malta", 35.8575, 14.4775),
+    Airport("BKPR", "Pristina", 42.5728, 21.0358),
 ]
 
 
@@ -66,16 +99,19 @@ def daterange_chunks(start: date, end: date, chunk_days: int) -> Iterable[tuple[
 
 
 def load_airports(path: Path | None) -> list[Airport]:
-    if path is None:
-        # Jeśli nie podasz pliku, bierzemy gotową listę lotnisk.
+    airports_path = path
+    if airports_path is None and DEFAULT_AIRPORTS_FILE.exists():
+        airports_path = DEFAULT_AIRPORTS_FILE
+
+    if airports_path is None:
         return DEFAULT_AIRPORTS
 
-    if not path.exists():
-        raise FileNotFoundError(f"Airports file not found: {path}")
+    if not airports_path.exists():
+        raise FileNotFoundError(f"Airports file not found: {airports_path}")
 
     airports: list[Airport] = []
-    with path.open("r", encoding="utf-8") as handle:
-        if path.suffix.lower() == ".json":
+    with airports_path.open("r", encoding="utf-8") as handle:
+        if airports_path.suffix.lower() == ".json":
             data = json.load(handle)
             for row in data:
                 airports.append(
@@ -156,7 +192,12 @@ def parse_args() -> argparse.Namespace:
     # Domyślny koniec zakresu ustawiony na 2026-04-04 — zgodnie z dostępnymi delays
     parser.add_argument("--end-date", type=parse_date, default=parse_date("2026-04-04"), help="YYYY-MM-DD")
     parser.add_argument("--output", default="spark/data/weather_hourly_batch.csv")
-    parser.add_argument("--airports-file", type=Path, default=None)
+    parser.add_argument(
+        "--airports-file",
+        type=Path,
+        default=None,
+        help="Optional CSV/JSON with columns: icao,airport,latitude,longitude. Replaces spark/airports.csv and code defaults.",
+    )
     parser.add_argument("--chunk-days", type=int, default=30)
     parser.add_argument("--retry", type=int, default=3)
     parser.add_argument("--sleep-seconds", type=float, default=0.2)
@@ -188,6 +229,12 @@ def main() -> int:
         output_path.unlink()
 
     airports = load_airports(args.airports_file)
+    if args.airports_file is not None:
+        print(f"Airports source: {args.airports_file}")
+    elif DEFAULT_AIRPORTS_FILE.exists():
+        print(f"Airports source: {DEFAULT_AIRPORTS_FILE}")
+    else:
+        print("Airports source: built-in defaults")
     print(f"Airports: {len(airports)}")
     # Nie wysyłamy zapytań dla przyszłych dat — API zwraca 400 dla zakresów poza dostępnymi danymi.
     effective_end = min(args.end_date, date.today())
