@@ -1,0 +1,224 @@
+Budowa modelu predykcji opoznien lotniczych
+
+1. Cel modelu
+
+Model ma przewidywac srednie opoznienie lotow dla danego dnia i danego obszaru
+kontroli ruchu lotniczego.
+
+Nie przewidujemy opoznienia pojedynczego lotu. Dane, ktore mamy, sa
+zagregowane, czyli opisuja caly dzien i caly obszar, np. Niemcy, Francje albo
+Hiszpanie.
+
+Wynikiem modelu jest kolumna:
+
+delay_per_flight
+
+Oznacza ona srednie opoznienie przypadajace na jeden lot.
+
+
+2. Skad bierzemy dane
+
+Uzywamy dwoch rodzajow danych:
+
+- dane o opoznieniach lotow z EUROCONTROL,
+- dane pogodowe z Open-Meteo.
+
+Z danych EUROCONTROL bierzemy informacje o tym:
+
+- jaki byl dzien,
+- jaki byl obszar lub instytucja kontroli ruchu lotniczego,
+- ile bylo lotow,
+- jakie bylo laczne opoznienie,
+- jakie bylo srednie opoznienie na lot.
+
+Z danych pogodowych bierzemy informacje o pogodzie dla lotnisk, np.:
+
+- temperatura,
+- wilgotnosc,
+- opady,
+- deszcz,
+- snieg,
+- zachmurzenie,
+- predkosc wiatru,
+- porywy wiatru.
+
+
+3. Laczenie danych
+
+Dane o opoznieniach sa przypisane do obszarow, np. DFS dla Niemiec albo DSNA
+dla Francji.
+
+Zeby dolaczyc pogode, kazdy obszar laczymy z reprezentatywnym lotniskiem.
+
+Przyklady:
+
+- DFS laczymy z lotniskiem Frankfurt EDDF,
+- DSNA laczymy z Paris Charles de Gaulle LFPG,
+- ENAIRE laczymy z Madrid Barajas LEMD,
+- Austro Control laczymy z Vienna LOWW.
+
+Dzieki temu dla danego dnia i obszaru mamy jednoczesnie:
+
+- informacje o opoznieniach,
+- informacje o pogodzie.
+
+
+4. Jakie cechy dostaje model
+
+Model dostaje na wejsciu cechy opisujace dzien, obszar, ruch lotniczy i pogode.
+
+Przykladowe cechy:
+
+- ENTITY_NAME, czyli nazwa obszaru lub instytucji,
+- ENTITY_TYPE, czyli typ obszaru,
+- total_flights, czyli liczba lotow,
+- weather_station_icao, czyli kod lotniska pogodowego,
+- feature_temperature,
+- feature_humidity,
+- feature_precipitation,
+- feature_rain,
+- feature_snowfall,
+- feature_cloud_cover,
+- feature_wind_speed,
+- feature_wind_gusts.
+
+Z daty robimy dodatkowe cechy:
+
+- day_of_week,
+- month_of_year,
+- day_of_month,
+- day_of_year.
+
+Samej daty nie uzywamy jako zwyklej cechy modelu. Data sluzy glownie do
+podzialu danych na treningowe i testowe oraz do stworzenia cech kalendarzowych.
+
+
+5. Jak dziala model
+
+Model jest zbudowany w Spark ML jako pipeline.
+
+Pipeline to kilka krokow wykonywanych po kolei:
+
+1. StringIndexer
+
+Ten krok zamienia wartosci tekstowe na liczby.
+
+Przyklad:
+
+ENTITY_NAME = DFS, DSNA, ENAIRE
+
+Regresja liniowa nie potrafi bezposrednio pracowac na tekstach, wiec trzeba je
+zakodowac liczbowo.
+
+2. Imputer
+
+Ten krok uzupelnia brakujace wartosci w kolumnach liczbowych.
+
+Jesli w danych brakuje np. temperatury albo predkosci wiatru, model nie powinien
+sie od razu wylozyc. Imputer podstawia sensowna wartosc zamiast braku.
+
+3. VectorAssembler
+
+Ten krok laczy wszystkie cechy w jedna kolumne o nazwie features.
+
+Spark ML wymaga, zeby model dostal jeden wektor cech, a nie wiele osobnych
+kolumn.
+
+4. LinearRegression
+
+To wlasciwy model predykcyjny.
+
+Regresja liniowa probuje znalezc zaleznosc miedzy cechami, np. pogoda, liczba
+lotow, miesiac, obszar, a wynikiem, czyli srednim opoznieniem.
+
+W uproszczeniu model uczy sie, jak bardzo dana cecha wplywa na opoznienie.
+
+
+6. Podzial na dane treningowe i testowe
+
+Dane dzielimy na dwie czesci:
+
+- dane treningowe,
+- dane testowe.
+
+Model uczy sie na danych treningowych.
+
+Potem sprawdzamy go na danych testowych, ktorych nie widzial podczas treningu.
+Dzieki temu mozemy ocenic, czy model rzeczywiscie cos przewiduje, czy tylko
+"zapamietal" dane treningowe.
+
+Podzial robimy wedlug daty. Starsze dane ida do treningu, a nowsze do testu.
+To ma sens, bo w prawdziwym uzyciu model tez uczylby sie z przeszlosci i
+przewidywal przyszlosc.
+
+
+7. Metryki modelu
+
+Po treningu liczymy dwie glowne metryki:
+
+RMSE
+
+RMSE pokazuje sredni blad predykcji. Im mniejszy RMSE, tym lepiej.
+
+W naszym przypadku RMSE wynioslo okolo:
+
+0.3069
+
+To znaczy, ze model myli sie srednio o okolo 0.31 jednostki delay_per_flight.
+
+R2
+
+R2 pokazuje, jak dobrze model tlumaczy zmiennosc danych.
+
+R2 bliskie 1 oznacza bardzo dobry model.
+R2 bliskie 0 oznacza, ze model jest podobny do przewidywania sredniej.
+R2 ponizej 0 oznacza, ze model wypada gorzej niz proste przewidywanie sredniej.
+
+W naszym przypadku R2 wynioslo okolo:
+
+-0.3840
+
+To oznacza, ze obecny model regresji liniowej nie radzi sobie jeszcze dobrze.
+Jest to raczej model bazowy, od ktorego mozna zaczac dalsze ulepszanie.
+
+
+8. Gdzie zapisuje sie model i metryki
+
+Wytrenowany model zapisuje sie w HDFS tutaj:
+
+hdfs://nn1:9000/bigdata/flight_delay/models/local_weather_delay_regression
+
+Metryki z treningu zapisuja sie tutaj:
+
+hdfs://nn1:9000/bigdata/flight_delay/models/local_weather_delay_regression_metrics
+
+Metryki sa zapisane jako JSON. Zawieraja m.in.:
+
+- RMSE,
+- R2,
+- liczbe rekordow treningowych,
+- liczbe rekordow testowych,
+- liste cech uzytych przez model,
+- sciezke do danych wejsciowych,
+- sciezke do zapisanego modelu.
+
+
+9. Jak krotko wytlumaczyc prowadzacemu
+
+Mozna powiedziec tak:
+
+Zbudowalismy model regresji liniowej w Spark ML, ktory przewiduje srednie
+opoznienie lotow dla danego dnia i obszaru kontroli ruchu lotniczego.
+
+Najpierw laczymy dane EUROCONTROL o opoznieniach z danymi pogodowymi
+Open-Meteo. Obszary kontroli ruchu lotniczego mapujemy na reprezentatywne
+lotniska, zeby dobrac dla nich pogode.
+
+Potem z tych danych tworzymy cechy, np. liczbe lotow, temperature, opady,
+wiatr, zachmurzenie oraz cechy kalendarzowe z daty.
+
+Model uczy sie na starszych danych, a testujemy go na nowszych danych.
+
+Po treningu zapisujemy model oraz metryki RMSE i R2. Obecny wynik pokazuje, ze
+regresja liniowa jest dobrym punktem startowym, ale nie jest jeszcze bardzo
+dokladna, bo R2 jest ujemne.

@@ -140,7 +140,8 @@ fi
 echo "START: Trening modelu liniowego"
 "$PYTHON_BIN" "$ROOT_DIR/model/model.py" \
   --input "hdfs://nn1:9000/bigdata/flight_delay/processed/features/daily_features_parquet" \
-  --output "hdfs://nn1:9000/bigdata/flight_delay/models/local_weather_delay_regression"
+  --output "hdfs://nn1:9000/bigdata/flight_delay/models/local_weather_delay_regression" \
+  --metrics-output "hdfs://nn1:9000/bigdata/flight_delay/models/local_weather_delay_regression_metrics"
 echo "END: Trening modelu liniowego"
 
 echo "DONE: Pipeline lotow i pogody"
@@ -154,4 +155,4 @@ echo "- HDFS weather daily: hdfs://nn1:9000/bigdata/flight_delay/processed/weath
 echo "- HDFS weather europe daily: hdfs://nn1:9000/bigdata/flight_delay/processed/weather_europe_daily"
 echo "- HDFS final features: hdfs://nn1:9000/bigdata/flight_delay/processed/features/daily_features_parquet"
 echo "- HDFS model: hdfs://nn1:9000/bigdata/flight_delay/models/local_weather_delay_regression"
-echo "- Metryki modelu są wypisywane wyżej podczas kroku treningu"
+echo "- HDFS training metrics: hdfs://nn1:9000/bigdata/flight_delay/models/local_weather_delay_regression_metrics"

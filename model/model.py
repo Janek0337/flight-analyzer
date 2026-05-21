@@ -1,4 +1,5 @@
 import argparse
+from datetime import datetime, timezone
 
 from pyspark.ml import Pipeline
 from pyspark.ml.evaluation import RegressionEvaluator
@@ -12,6 +13,7 @@ from pyspark.sql.types import NumericType
 HDFS_BASE = "hdfs://nn1:9000"
 DEFAULT_INPUT = HDFS_BASE + "/bigdata/flight_delay/processed/features/daily_features_parquet"
 DEFAULT_OUTPUT = HDFS_BASE + "/bigdata/flight_delay/models/local_weather_delay_regression"
+DEFAULT_METRICS_OUTPUT = DEFAULT_OUTPUT + "_metrics"
 TARGET_COL = "delay_per_flight"
 DATE_COL = "date"
 
@@ -20,6 +22,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Train delay regression model")
     parser.add_argument("--input", default=DEFAULT_INPUT)
     parser.add_argument("--output", default=DEFAULT_OUTPUT)
+    parser.add_argument("--metrics-output", default=DEFAULT_METRICS_OUTPUT)
     parser.add_argument("--label", default=TARGET_COL)
     return parser.parse_args()
 
@@ -115,6 +118,10 @@ def evaluate(predictions, label_col):
     return rmse, r2
 
 
+def save_metrics(spark, metrics, output_path):
+    spark.createDataFrame([metrics]).coalesce(1).write.mode("overwrite").json(output_path)
+
+
 def main():
     args = parse_args()
 
@@ -143,8 +150,11 @@ def main():
     model_data = data.select(DATE_COL, args.label, *feature_columns).na.drop(subset=[args.label])
     train, test = split_by_date(model_data)
 
-    print(f"Training rows: {train.count()}")
-    print(f"Test rows: {test.count()}")
+    train_rows = train.count()
+    test_rows = test.count()
+
+    print(f"Training rows: {train_rows}")
+    print(f"Test rows: {test_rows}")
     print("Features used:")
     for name in feature_columns:
         print(f" - {name}")
@@ -158,6 +168,21 @@ def main():
     print("Metrics:")
     print(f"RMSE: {rmse:.4f}")
     print(f"R2: {r2:.4f}")
+
+    metrics = {
+        "trained_at_utc": datetime.now(timezone.utc).isoformat(),
+        "input_path": args.input,
+        "model_output_path": args.output,
+        "label": args.label,
+        "train_rows": train_rows,
+        "test_rows": test_rows,
+        "feature_count": len(feature_columns),
+        "features": feature_columns,
+        "rmse": rmse,
+        "r2": r2,
+    }
+    save_metrics(spark, metrics, args.metrics_output)
+    print(f"Saved metrics to: {args.metrics_output}")
 
     print("Sample predictions:")
     predictions.select(DATE_COL, "prediction", args.label).show(20, truncate=False)

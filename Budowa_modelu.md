@@ -123,6 +123,16 @@ RMSE - sredni blad predykcji
 R2   - jak dobrze model tlumaczy zmiennosc danych
 ```
 
+Po treningu metryki sa zapisywane jako JSON, razem z podstawowymi informacjami
+o uruchomieniu: liczba rekordow treningowych/testowych, uzyte cechy, sciezka
+wejsciowa, sciezka modelu oraz wartosci `RMSE` i `R2`.
+
+Domyslna sciezka metryk:
+
+```text
+hdfs://nn1:9000/bigdata/flight_delay/models/local_weather_delay_regression_metrics
+```
+
 ## Skad Sa Nazwy ENTITY_NAME
 
 `ENTITY_NAME` nie wymyslamy sami. Ta kolumna pochodzi z plikow EUROCONTROL
@@ -169,7 +179,8 @@ historyczne wzorce opoznien.
 ```bash
 spark-submit model/model.py \
   --input hdfs://nn1:9000/bigdata/flight_delay/processed/features/daily_features_parquet \
-  --output hdfs://nn1:9000/bigdata/flight_delay/models/local_weather_delay_regression
+  --output hdfs://nn1:9000/bigdata/flight_delay/models/local_weather_delay_regression \
+  --metrics-output hdfs://nn1:9000/bigdata/flight_delay/models/local_weather_delay_regression_metrics
 ```
 
 Caly pipeline:
