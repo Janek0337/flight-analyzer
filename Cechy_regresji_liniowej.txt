@@ -1,0 +1,347 @@
+Cechy dodawane do regresji liniowej
+
+Ten plik opisuje, jakie dane dodajemy do regresji liniowej, zeby model mogl
+przewidywac srednie opoznienie lotow.
+
+Model przewiduje:
+
+delay_per_flight
+
+czyli srednie opoznienie przypadajace na jeden lot dla danego dnia i obszaru.
+
+
+1. Jak regresja liniowa uzywa cech
+
+Regresja liniowa bierze wiele cech i kazdej z nich przypisuje wage.
+
+W uproszczeniu:
+
+predykcja = waga_1 * cecha_1 + waga_2 * cecha_2 + ... + stala
+
+Jesli waga danej cechy jest dodatnia, to wzrost tej cechy zwieksza przewidywane
+opoznienie.
+
+Jesli waga danej cechy jest ujemna, to wzrost tej cechy zmniejsza przewidywane
+opoznienie.
+
+Wazne: to, czy cecha naprawde zwieksza albo zmniejsza wynik, zalezy od tego,
+czego model nauczyl sie z danych. Ponizej jest opis sensu cech i oczekiwanego
+wplywu, ale ostateczny kierunek wynika ze wspolczynnikow modelu.
+
+
+2. Cechy identyfikujace obszar
+
+weather_station_icao
+
+Kod lotniska, z ktorego bierzemy pogode, np. EDDF, LFPG, LEMD.
+
+Po co to dodajemy:
+
+Model moze nauczyc sie, ze pogoda z roznych lotnisk/regionow ma rozne znaczenie
+dla opoznien.
+
+Mozliwy wplyw:
+
+Sama nazwa lotniska nie ma naturalnego kierunku "wiecej/mniej". To jest cecha
+kategoryczna. Model uczy sie osobnych efektow dla roznych lotnisk.
+
+
+ENTITY_NAME
+
+Nazwa obszaru albo instytucji kontroli ruchu lotniczego, np. DFS, DSNA,
+ENAIRE.
+
+Po co to dodajemy:
+
+Rozne obszary maja rozne historyczne wzorce opoznien. Na przyklad jedne obszary
+moga miec czesciej wiekszy ruch albo inne problemy operacyjne.
+
+Mozliwy wplyw:
+
+To tez jest cecha kategoryczna. Nie rosnie ani nie maleje liczbowo. Model uczy
+sie, czy dany obszar jest historycznie bardziej zwiazany z wiekszym albo
+mniejszym opoznieniem.
+
+
+ENTITY_TYPE
+
+Typ obszaru z danych EUROCONTROL.
+
+Po co to dodajemy:
+
+Pozwala modelowi rozroznic rodzaj jednostki lub obszaru, dla ktorego liczymy
+opoznienia.
+
+Mozliwy wplyw:
+
+Cecha kategoryczna. Model moze nauczyc sie, ze niektore typy obszarow maja
+inne srednie opoznienia niz pozostale.
+
+
+weather_station_name
+
+Nazwa lotniska pogodowego, np. Frankfurt, Warsaw Chopin, Paris Charles de
+Gaulle.
+
+Po co to dodajemy:
+
+To dodatkowy opis stacji pogodowej. Informacyjnie jest podobne do
+weather_station_icao.
+
+Mozliwy wplyw:
+
+Cecha kategoryczna. Model moze nauczyc sie efektu dla konkretnej stacji.
+Praktycznie moze byc czesciowo nadmiarowa wobec weather_station_icao.
+
+
+weather_match_level
+
+Informacja, jak dobrano pogode do obszaru.
+
+Po co to dodajemy:
+
+Pokazuje, czy pogoda zostala dobrana bezposrednio do danego obszaru, czy np.
+bardziej ogolnie/zastepczo.
+
+Mozliwy wplyw:
+
+Cecha kategoryczna. Jesli dopasowanie pogody jest gorsze, model moze nauczyc
+sie, ze taka obserwacja jest mniej typowa albo ma inny poziom bledu/opoznien.
+
+
+3. Cechy o ruchu lotniczym
+
+total_flights
+
+Liczba lotow w danym dniu i obszarze.
+
+Po co to dodajemy:
+
+Wiekszy ruch moze oznaczac wieksze obciazenie systemu kontroli ruchu
+lotniczego, lotnisk i tras.
+
+Mozliwy wplyw:
+
+Czesto mozna oczekiwac, ze wieksza liczba lotow zwieksza ryzyko opoznien,
+czyli moze zwiekszac przewidywane delay_per_flight.
+
+Ale nie zawsze musi tak byc. Duze obszary moga miec tez lepsza infrastrukture,
+wiec ostateczny kierunek zalezy od danych.
+
+
+4. Cechy pogodowe
+
+feature_temperature
+
+Srednia temperatura.
+
+Po co to dodajemy:
+
+Temperatura moze byc powiazana z sezonem i warunkami pogodowymi.
+
+Mozliwy wplyw:
+
+Sama temperatura nie musi jednoznacznie zwiekszac opoznien. Bardzo niska
+temperatura moze oznaczac oblodzenie i trudniejsze warunki, a wysoka
+temperatura moze byc raczej neutralna. Wplyw zalezy od danych.
+
+
+feature_humidity
+
+Srednia wilgotnosc.
+
+Po co to dodajemy:
+
+Wilgotnosc moze laczyc sie z mgla, chmurami albo opadami.
+
+Mozliwy wplyw:
+
+Wyzsza wilgotnosc moze zwiekszac ryzyko gorszej widocznosci, wiec moze
+zwiekszac opoznienia. Nie jest to jednak tak silna cecha jak bezposrednie opady
+czy wiatr.
+
+
+feature_precipitation
+
+Laczna ilosc opadow.
+
+Po co to dodajemy:
+
+Opady moga utrudniac starty, ladowania i obsluge lotniskowa.
+
+Mozliwy wplyw:
+
+Wieksze opady zazwyczaj moga zwiekszac przewidywane opoznienie.
+
+
+feature_rain
+
+Ilosc deszczu.
+
+Po co to dodajemy:
+
+Deszcz pogarsza warunki operacyjne, szczegolnie przy intensywnych opadach.
+
+Mozliwy wplyw:
+
+Wiekszy deszcz moze zwiekszac opoznienia.
+
+
+feature_snowfall
+
+Ilosc opadow sniegu.
+
+Po co to dodajemy:
+
+Snieg ma duzy wplyw na lotniska, bo moze wymagac odladzania samolotow i
+odsniezania pasow.
+
+Mozliwy wplyw:
+
+Wiekszy snieg zwykle powinien zwiekszac opoznienia.
+
+
+feature_cloud_cover
+
+Srednie zachmurzenie.
+
+Po co to dodajemy:
+
+Zachmurzenie moze byc zwiazane z gorsza widocznoscia i ogolnie trudniejszymi
+warunkami pogodowymi.
+
+Mozliwy wplyw:
+
+Wieksze zachmurzenie moze zwiekszac opoznienia, ale samo w sobie nie musi byc
+tak mocne jak opady, snieg albo wiatr.
+
+
+feature_wind_speed
+
+Srednia predkosc wiatru.
+
+Po co to dodajemy:
+
+Wiatr moze utrudniac starty i ladowania, szczegolnie jesli jest silny albo
+niekorzystny wzgledem pasa.
+
+Mozliwy wplyw:
+
+Wieksza predkosc wiatru moze zwiekszac opoznienia.
+
+
+feature_wind_gusts
+
+Maksymalne porywy wiatru.
+
+Po co to dodajemy:
+
+Porywy wiatru sa wazne, bo nagle zmiany wiatru moga byc trudniejsze dla
+operacji lotniczych niz sama srednia predkosc.
+
+Mozliwy wplyw:
+
+Wieksze porywy wiatru moga zwiekszac opoznienia.
+
+
+5. Cechy kalendarzowe
+
+day_of_week
+
+Dzien tygodnia zapisany jako liczba.
+
+Po co to dodajemy:
+
+Ruch lotniczy moze wygladac inaczej w rozne dni tygodnia. Na przyklad dni
+robocze i weekendy moga miec inne natezenie.
+
+Mozliwy wplyw:
+
+Nie ma prostego kierunku "im wiekszy dzien tygodnia, tym wieksze opoznienie".
+To raczej informacja o wzorcu tygodniowym.
+
+
+month_of_year
+
+Miesiac roku.
+
+Po co to dodajemy:
+
+Miesiac pomaga uchwycic sezonowosc. Zima, lato i okresy wakacyjne moga miec
+inne opoznienia.
+
+Mozliwy wplyw:
+
+Nie ma prostego kierunku liniowego. Model moze jednak nauczyc sie, ze niektore
+miesiace sa bardziej zwiazane z opoznieniami, np. przez zime, wakacje albo
+wiekszy ruch.
+
+
+day_of_month
+
+Dzien miesiaca.
+
+Po co to dodajemy:
+
+Ta cecha moze wychwycic slabsze wzorce w obrebie miesiaca, chociaz zwykle nie
+jest najwazniejsza.
+
+Mozliwy wplyw:
+
+Nie ma naturalnego kierunku. To pomocnicza cecha kalendarzowa.
+
+
+day_of_year
+
+Dzien roku od 1 do 365/366.
+
+Po co to dodajemy:
+
+Pomaga modelowi widziec sezonowosc w ciagu roku.
+
+Mozliwy wplyw:
+
+Nie nalezy interpretowac tego prosto jako "im pozniejszy dzien roku, tym wieksze
+opoznienie". Bardziej chodzi o sezon, np. zima, lato, okresy urlopowe.
+
+
+6. Co moze zwiekszac opoznienia
+
+Najbardziej intuicyjnie opoznienia moga zwiekszac:
+
+- wieksza liczba lotow,
+- wieksze opady,
+- wiekszy deszcz,
+- wiekszy snieg,
+- wiekszy wiatr,
+- silniejsze porywy wiatru,
+- niektore obszary, jesli historycznie mialy wieksze opoznienia,
+- niektore miesiace albo dni tygodnia, jesli w danych mialy wieksze opoznienia.
+
+
+7. Co moze zmniejszac opoznienia
+
+Opoznienia moga byc mniejsze, gdy:
+
+- warunki pogodowe sa spokojniejsze,
+- jest mniej opadow,
+- jest mniej sniegu,
+- wiatr jest slabszy,
+- ruch lotniczy jest mniejszy,
+- dany obszar historycznie mial mniejsze opoznienia.
+
+Ale w regresji liniowej nie wpisujemy recznie, co ma zwiekszac albo zmniejszac
+wynik. Model sam wylicza to podczas treningu na podstawie danych.
+
+
+8. Jak to powiedziec prowadzacemu
+
+Do regresji liniowej dodajemy cechy opisujace obszar, liczbe lotow, pogode i
+kalendarz. Model na podstawie danych historycznych uczy sie wag dla tych cech.
+
+Jesli dana cecha ma wage dodatnia, to zwieksza przewidywane opoznienie. Jesli ma
+wage ujemna, to zmniejsza przewidywane opoznienie.
+
+Najbardziej logiczne cechy zwiekszajace opoznienia to opady, snieg, silny wiatr,
+porywy wiatru i duza liczba lotow. Cechy takie jak nazwa obszaru, lotnisko czy
+miesiac pomagaja modelowi rozpoznac rozne wzorce historyczne i sezonowe.
