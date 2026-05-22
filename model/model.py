@@ -1,12 +1,15 @@
 import argparse
+import math
 from datetime import datetime, timezone
 
 from pyspark.ml import Pipeline
 from pyspark.ml.evaluation import RegressionEvaluator
-from pyspark.ml.feature import Imputer, StringIndexer, VectorAssembler
+from pyspark.ml.feature import Imputer, OneHotEncoder, StringIndexer, VectorAssembler
 from pyspark.ml.regression import LinearRegression
+from pyspark.sql import Window
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, dayofmonth, dayofweek, dayofyear, month
+from pyspark.sql.functions import avg as spark_avg
+from pyspark.sql.functions import col, cos, dayofmonth, dayofweek, dayofyear, lag, lit, month, sin, when
 from pyspark.sql.types import NumericType
 
 
@@ -45,6 +48,7 @@ def get_feature_columns(columns, label_col):
     ignored = {
         DATE_COL,
         label_col,
+        "weather_station_name",
         "total_delay",
         "other_delay",
         "weather_delay",
@@ -77,6 +81,47 @@ def get_feature_columns(columns, label_col):
     return [name for name in columns if name not in ignored]
 
 
+def add_training_features(data, label_col):
+    data = data.withColumn("day_of_week", dayofweek(col(DATE_COL)))
+    data = data.withColumn("month_of_year", month(col(DATE_COL)))
+    data = data.withColumn("day_of_month", dayofmonth(col(DATE_COL)))
+    data = data.withColumn("day_of_year", dayofyear(col(DATE_COL)))
+
+    data = data.withColumn("day_of_week_sin", sin(2 * lit(math.pi) * col("day_of_week") / lit(7.0)))
+    data = data.withColumn("day_of_week_cos", cos(2 * lit(math.pi) * col("day_of_week") / lit(7.0)))
+    data = data.withColumn("day_of_year_sin", sin(2 * lit(math.pi) * col("day_of_year") / lit(365.25)))
+    data = data.withColumn("day_of_year_cos", cos(2 * lit(math.pi) * col("day_of_year") / lit(365.25)))
+
+    if "ENTITY_NAME" in data.columns:
+        entity_window = Window.partitionBy("ENTITY_NAME").orderBy(DATE_COL)
+        rolling_window_7d = entity_window.rowsBetween(-7, -1)
+        rolling_window_14d = entity_window.rowsBetween(-14, -1)
+
+        data = data.withColumn("previous_delay_per_flight", lag(col(label_col), 1).over(entity_window))
+        data = data.withColumn("rolling_7d_delay_per_flight", spark_avg(col(label_col)).over(rolling_window_7d))
+        data = data.withColumn("rolling_14d_delay_per_flight", spark_avg(col(label_col)).over(rolling_window_14d))
+        if "total_flights" in data.columns:
+            data = data.withColumn("previous_total_flights", lag(col("total_flights"), 1).over(entity_window))
+
+    if "feature_precipitation" in data.columns:
+        data = data.withColumn("is_precipitation_day", when(col("feature_precipitation") > 0, 1.0).otherwise(0.0))
+    if "feature_rain" in data.columns:
+        data = data.withColumn("is_rainy_day", when(col("feature_rain") > 0, 1.0).otherwise(0.0))
+    if "feature_snowfall" in data.columns:
+        data = data.withColumn("is_snowy_day", when(col("feature_snowfall") > 0, 1.0).otherwise(0.0))
+    if "feature_wind_speed" in data.columns:
+        data = data.withColumn("is_windy_day", when(col("feature_wind_speed") >= 30, 1.0).otherwise(0.0))
+    if "feature_temperature" in data.columns:
+        data = data.withColumn("temperature_below_zero", when(col("feature_temperature") < 0, 1.0).otherwise(0.0))
+
+    if "feature_rain" in data.columns and "feature_wind_speed" in data.columns:
+        data = data.withColumn("rain_x_wind_speed", col("feature_rain") * col("feature_wind_speed"))
+    if "feature_snowfall" in data.columns and "feature_temperature" in data.columns:
+        data = data.withColumn("snow_x_below_zero", col("feature_snowfall") * col("temperature_below_zero"))
+
+    return data
+
+
 def build_pipeline(data, feature_columns, label_col):
     numeric_columns = [
         field.name
@@ -93,12 +138,17 @@ def build_pipeline(data, feature_columns, label_col):
         stages.append(StringIndexer(inputCol=name, outputCol=indexed_name, handleInvalid="keep"))
         indexed_columns.append(indexed_name)
 
+    encoded_columns = []
+    if indexed_columns:
+        encoded_columns = [f"{name}_encoded" for name in text_columns]
+        stages.append(OneHotEncoder(inputCols=indexed_columns, outputCols=encoded_columns, handleInvalid="keep"))
+
     imputed_columns = []
     if numeric_columns:
         imputed_columns = [f"{name}_imputed" for name in numeric_columns]
         stages.append(Imputer(inputCols=numeric_columns, outputCols=imputed_columns))
 
-    stages.append(VectorAssembler(inputCols=imputed_columns + indexed_columns, outputCol="features"))
+    stages.append(VectorAssembler(inputCols=imputed_columns + encoded_columns, outputCol="features"))
     stages.append(
         LinearRegression(
             featuresCol="features",
@@ -114,8 +164,9 @@ def build_pipeline(data, feature_columns, label_col):
 
 def evaluate(predictions, label_col):
     rmse = RegressionEvaluator(labelCol=label_col, predictionCol="prediction", metricName="rmse").evaluate(predictions)
+    mae = RegressionEvaluator(labelCol=label_col, predictionCol="prediction", metricName="mae").evaluate(predictions)
     r2 = RegressionEvaluator(labelCol=label_col, predictionCol="prediction", metricName="r2").evaluate(predictions)
-    return rmse, r2
+    return rmse, mae, r2
 
 
 def save_metrics(spark, metrics, output_path):
@@ -138,10 +189,7 @@ def main():
     if DATE_COL not in data.columns:
         raise RuntimeError(f"Missing date column: {DATE_COL}")
 
-    data = data.withColumn("day_of_week", dayofweek(col(DATE_COL)))
-    data = data.withColumn("month_of_year", month(col(DATE_COL)))
-    data = data.withColumn("day_of_month", dayofmonth(col(DATE_COL)))
-    data = data.withColumn("day_of_year", dayofyear(col(DATE_COL)))
+    data = add_training_features(data, args.label)
 
     feature_columns = get_feature_columns(data.columns, args.label)
     if not feature_columns:
@@ -163,11 +211,19 @@ def main():
     model = pipeline.fit(train)
     predictions = model.transform(test)
 
-    rmse, r2 = evaluate(predictions, args.label)
+    rmse, mae, r2 = evaluate(predictions, args.label)
+    baseline_prediction = train.select(spark_avg(col(args.label))).first()[0]
+    baseline_predictions = test.withColumn("prediction", lit(baseline_prediction))
+    baseline_rmse, baseline_mae, baseline_r2 = evaluate(baseline_predictions, args.label)
 
     print("Metrics:")
     print(f"RMSE: {rmse:.4f}")
+    print(f"MAE: {mae:.4f}")
     print(f"R2: {r2:.4f}")
+    print("Baseline metrics (train mean prediction):")
+    print(f"Baseline RMSE: {baseline_rmse:.4f}")
+    print(f"Baseline MAE: {baseline_mae:.4f}")
+    print(f"Baseline R2: {baseline_r2:.4f}")
 
     metrics = {
         "trained_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -179,7 +235,12 @@ def main():
         "feature_count": len(feature_columns),
         "features": feature_columns,
         "rmse": rmse,
+        "mae": mae,
         "r2": r2,
+        "baseline_prediction": baseline_prediction,
+        "baseline_rmse": baseline_rmse,
+        "baseline_mae": baseline_mae,
+        "baseline_r2": baseline_r2,
     }
     save_metrics(spark, metrics, args.metrics_output)
     print(f"Saved metrics to: {args.metrics_output}")

@@ -68,6 +68,7 @@ ENTITY_NAME
 ENTITY_TYPE
 weather_station_icao
 total_flights
+weather_match_level
 feature_temperature
 feature_humidity
 feature_precipitation
@@ -78,6 +79,21 @@ feature_wind_speed
 feature_wind_gusts
 day_of_week
 month_of_year
+day_of_week_sin
+day_of_week_cos
+day_of_year_sin
+day_of_year_cos
+previous_delay_per_flight
+rolling_7d_delay_per_flight
+rolling_14d_delay_per_flight
+previous_total_flights
+is_precipitation_day
+is_rainy_day
+is_snowy_day
+is_windy_day
+temperature_below_zero
+rain_x_wind_speed
+snow_x_below_zero
 ```
 
 Celem predykcji jest:
@@ -93,16 +109,39 @@ dany obszar + dana pogoda + liczba lotow + dzien/ miesiac
 => srednie opoznienie
 ```
 
+Po pierwszej wersji modelu dodalismy kilka ulepszen cech:
+
+```text
+OneHotEncoder dla kategorii
+cechy sezonowe sin/cos z dnia tygodnia i dnia roku
+opoznienie z poprzedniego dnia dla danego ENTITY_NAME
+srednie opoznienie z ostatnich 7 i 14 dni
+liczba lotow z poprzedniego dnia
+flagi pogodowe: deszcz, snieg, opady, silny wiatr, temperatura ponizej zera
+interakcje pogodowe: deszcz * wiatr oraz snieg * temperatura ponizej zera
+```
+
+Te cechy pomagaja regresji liniowej, bo model nie dostaje juz tylko surowych
+wartosci pogody i nazw obszarow. Dostaje tez informacje o sezonowosci,
+historii opoznien i prostych sytuacjach pogodowych, ktore moga zwiekszac
+ryzyko opoznien.
+
 ## Jakiego Modelu Uzywamy
 
 Model jest zbudowany w Spark ML jako `Pipeline`. W srodku sa proste kroki:
 
 ```text
-StringIndexer    -> zamienia tekstowe kolumny na liczby
+StringIndexer    -> przygotowuje tekstowe kategorie do kodowania
+OneHotEncoder    -> koduje kategorie bez sztucznego porzadku liczbowego
 Imputer          -> uzupelnia braki w kolumnach liczbowych
 VectorAssembler  -> sklada wszystkie cechy w jedna kolumne features
 LinearRegression -> trenuje model regresji liniowej
 ```
+
+`OneHotEncoder` jest wazny, bo nazwy takie jak `DFS`, `DSNA` albo `ENAIRE` nie
+maja naturalnej kolejnosci. W samej regresji liniowej nie chcemy, zeby model
+traktowal jedna nazwe jako "wieksza" od drugiej tylko dlatego, ze dostala
+wiekszy indeks liczbowy.
 
 Glowny model predykcyjny to:
 
@@ -120,12 +159,37 @@ Do sprawdzania wyniku uzywamy:
 
 ```text
 RMSE - sredni blad predykcji
+MAE  - sredni blad bezwzgledny predykcji
 R2   - jak dobrze model tlumaczy zmiennosc danych
 ```
 
 Po treningu metryki sa zapisywane jako JSON, razem z podstawowymi informacjami
 o uruchomieniu: liczba rekordow treningowych/testowych, uzyte cechy, sciezka
-wejsciowa, sciezka modelu oraz wartosci `RMSE` i `R2`.
+wejsciowa, sciezka modelu oraz wartosci `RMSE`, `MAE` i `R2`.
+
+Zapisujemy tez metryki baseline'u. Baseline to prosty punkt odniesienia, ktory
+zawsze przewiduje srednia wartosc opoznienia ze zbioru treningowego. Dzieki
+temu widzimy, czy model jest faktycznie lepszy od bardzo prostego przewidywania.
+
+Po aktualizacji cech uzyskane metryki na zbiorze testowym byly:
+
+```text
+RMSE: 0.1716
+MAE:  0.0954
+R2:   0.5671
+```
+
+Dla baseline'u:
+
+```text
+Baseline RMSE: 0.3210
+Baseline MAE:  0.2717
+Baseline R2:  -0.5149
+```
+
+Wynik `R2 = 0.5671` oznacza, ze model wyjasnia okolo 56.7% zmiennosci srednich
+opoznien w zbiorze testowym. `MAE = 0.0954` oznacza sredni blad bezwzgledny
+okolo 0.095 minuty, czyli okolo 5.7 sekundy na lot.
 
 Domyslna sciezka metryk:
 
