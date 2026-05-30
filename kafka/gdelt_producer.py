@@ -22,6 +22,7 @@ import tempfile
 import time
 import urllib.request
 import zipfile
+from datetime import datetime, timedelta
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -31,7 +32,10 @@ from confluent_kafka import Producer
 logger = logging.getLogger("gdelt-producer")
 logging.basicConfig(level=logging.INFO)
 
-GDELT_SOURCE = os.getenv("GDELT_SOURCE", "")
+GDELT_SOURCE = os.getenv("GDELT_SOURCE", "https://data.gdeltproject.org/events/20260530.export.CSV.zip")
+GDELT_BASE_URL = os.getenv("GDELT_BASE_URL", "https://data.gdeltproject.org/events")
+GDELT_START_DATE = os.getenv("GDELT_START_DATE", "20260101")
+GDELT_END_DATE = os.getenv("GDELT_END_DATE", "20260529")
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
 KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "gdelt_raw")
 POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "86400"))
@@ -102,12 +106,12 @@ EVENTS_FIELDS = [
     "SOURCEURL",
 ]
 
-producer = Producer({"bootstrap.servers": KAFKA_BOOTSTRAP})
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Produce GDELT Events into Kafka")
-    parser.add_argument("--source", default=GDELT_SOURCE, help="URL or local path to GDELT file")
+    parser.add_argument("--source", default=GDELT_SOURCE, help="URL or local path to a single GDELT file")
+    parser.add_argument("--start-date", default=GDELT_START_DATE, help="Start date for historical download (YYYYMMDD)")
+    parser.add_argument("--end-date", default=GDELT_END_DATE, help="End date for historical download (YYYYMMDD)")
+    parser.add_argument("--base-url", default=GDELT_BASE_URL, help="Base URL for daily GDELT archives")
     parser.add_argument("--topic", default=KAFKA_TOPIC, help="Kafka topic to publish to")
     parser.add_argument("--bootstrap", default=KAFKA_BOOTSTRAP, help="Kafka bootstrap servers")
     parser.add_argument("--interval", type=int, default=POLL_INTERVAL, help="Seconds between polling runs")
@@ -136,6 +140,41 @@ def open_input(path: str):
     return open(path, "r", encoding="utf-8", errors="ignore")
 
 
+def parse_date(date_str: str) -> datetime:
+    try:
+        return datetime.strptime(date_str, "%Y%m%d")
+    except ValueError as exc:
+        raise RuntimeError("Date must be in YYYYMMDD format") from exc
+
+
+def date_range(start_date: str, end_date: str) -> list[str]:
+    start = parse_date(start_date)
+    end = parse_date(end_date or start_date)
+    if end < start:
+        raise RuntimeError("end-date must be the same or later than start-date")
+
+    dates = []
+    current = start
+    while current <= end:
+        dates.append(current.strftime("%Y%m%d"))
+        current += timedelta(days=1)
+    return dates
+
+
+def build_gdelt_url(date_str: str, base_url: str) -> str:
+    return f"{base_url.rstrip('/')}/{date_str}.export.CSV.zip"
+
+
+def resolve_sources(source: str, start_date: str, end_date: str, base_url: str) -> list[str]:
+    if start_date:
+        if not end_date:
+            end_date = start_date
+        return [build_gdelt_url(d, base_url) for d in date_range(start_date, end_date)]
+    if not source:
+        raise RuntimeError("GDELT source is required; set GDELT_SOURCE or use --source")
+    return [source]
+
+
 def normalize_row(row: list[str]) -> dict[str, str]:
     return {key: value for key, value in zip(EVENTS_FIELDS, row)}
 
@@ -159,9 +198,11 @@ def delivery_report(err, msg) -> None:
         logger.error("Delivery failed for key=%s: %s", msg.key(), err)
 
 
-def produce_records(source: str, topic: str, max_records: int = 0, dry_run: bool = False) -> int:
+def produce_records(producer: Producer | None, source: str, topic: str, max_records: int = 0, dry_run: bool = False) -> int:
     if not source:
         raise RuntimeError("GDELT source is required; set GDELT_SOURCE or use --source")
+    if not dry_run and producer is None:
+        raise RuntimeError("Producer must be provided unless --dry-run is used")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         source_path = source
@@ -194,27 +235,48 @@ def produce_records(source: str, topic: str, max_records: int = 0, dry_run: bool
             if not dry_run:
                 producer.flush()
 
-    logger.info("Produced %d records to topic %s", sent, topic)
+    logger.info("Produced %d records to topic %s from source %s", sent, topic, source)
     return sent
 
 
-def run_once(source: str, topic: str, max_records: int, dry_run: bool) -> None:
-    logger.info("Running GDELT producer for source=%s topic=%s", source, topic)
+def run_once(producer: Producer | None, sources: list[str], topic: str, max_records: int, dry_run: bool) -> None:
+    logger.info("Running GDELT producer for %d sources into topic=%s", len(sources), topic)
     try:
-        produce_records(source=source, topic=topic, max_records=max_records, dry_run=dry_run)
+        total = 0
+        for source in sources:
+            if max_records and total >= max_records:
+                break
+            remaining = max_records - total if max_records else 0
+            produced = produce_records(
+                producer=producer,
+                source=source,
+                topic=topic,
+                max_records=remaining,
+                dry_run=dry_run,
+            )
+            total += produced
+        logger.info("Total produced %d records", total)
     except (HTTPError, URLError) as err:
         logger.error("HTTP error while fetching GDELT source: %s", err)
     except Exception:
         logger.exception("Unexpected error during GDELT production")
 
 
-def main_loop(source: str, topic: str, interval: int, max_poll_count: int, max_records: int, dry_run: bool) -> None:
+def main_loop(
+    producer: Producer | None,
+    sources: list[str],
+    topic: str,
+    interval: int,
+    max_poll_count: int,
+    max_records: int,
+    dry_run: bool,
+) -> None:
     if max_poll_count == 0:
         max_poll_count = 1
 
     poll_count = 0
     while True:
-        run_once(source=source, topic=topic, max_records=max_records, dry_run=dry_run)
+        run_once(producer=producer, sources=sources, topic=topic, max_records=max_records, dry_run=dry_run)
         poll_count += 1
         if max_poll_count and poll_count >= max_poll_count:
             logger.info("Reached max poll count %d, exiting", max_poll_count)
@@ -225,8 +287,11 @@ def main_loop(source: str, topic: str, interval: int, max_poll_count: int, max_r
 
 if __name__ == "__main__":
     args = parse_args()
+    sources = resolve_sources(args.source, args.start_date, args.end_date, args.base_url)
+    producer = None if args.dry_run else Producer({"bootstrap.servers": args.bootstrap})
     main_loop(
-        source=args.source,
+        producer=producer,
+        sources=sources,
         topic=args.topic,
         interval=args.interval,
         max_poll_count=args.max_polls,
