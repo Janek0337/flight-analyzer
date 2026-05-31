@@ -18,6 +18,7 @@ import io
 import json
 import logging
 import os
+import ssl
 import tempfile
 import time
 import urllib.request
@@ -32,10 +33,11 @@ from confluent_kafka import Producer
 logger = logging.getLogger("gdelt-producer")
 logging.basicConfig(level=logging.INFO)
 
-GDELT_SOURCE = os.getenv("GDELT_SOURCE", "https://data.gdeltproject.org/events/20260530.export.CSV.zip")
-GDELT_BASE_URL = os.getenv("GDELT_BASE_URL", "https://data.gdeltproject.org/events")
+GDELT_SOURCE = os.getenv("GDELT_SOURCE", "http://data.gdeltproject.org/events/20260530.export.CSV.zip")
+GDELT_BASE_URL = os.getenv("GDELT_BASE_URL", "http://data.gdeltproject.org/events")
 GDELT_START_DATE = os.getenv("GDELT_START_DATE", "20260101")
 GDELT_END_DATE = os.getenv("GDELT_END_DATE", "20260529")
+GDELT_INSECURE = os.getenv("GDELT_INSECURE", "false").lower() in ("1", "true", "yes")
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
 KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "gdelt_raw")
 POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "86400"))
@@ -117,16 +119,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--interval", type=int, default=POLL_INTERVAL, help="Seconds between polling runs")
     parser.add_argument("--max-polls", type=int, default=MAX_POLL_COUNT, help="How many polling cycles to execute")
     parser.add_argument("--max-records", type=int, default=MAX_RECORDS, help="Max records to send per cycle")
+    parser.add_argument("--insecure", action="store_true", default=GDELT_INSECURE, help="Disable SSL certificate verification for downloads")
     parser.add_argument("--dry-run", action="store_true", help="Parse records without sending to Kafka")
     return parser.parse_args()
 
 
-def download_source(url: str, dest_path: str) -> str:
+def download_source(url: str, dest_path: str, insecure: bool = False) -> str:
     if os.path.exists(url):
         return url
 
     logger.info("Downloading GDELT file from %s", url)
-    urllib.request.urlretrieve(url, dest_path)
+    ctx = None
+    if insecure:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
+    request = Request(url, headers={"User-Agent": "flight-analyzer-gdelt-producer"})
+    with urlopen(request, context=ctx) as response:
+        with open(dest_path, "wb") as out_file:
+            out_file.write(response.read())
     return dest_path
 
 
@@ -198,7 +210,7 @@ def delivery_report(err, msg) -> None:
         logger.error("Delivery failed for key=%s: %s", msg.key(), err)
 
 
-def produce_records(producer: Producer | None, source: str, topic: str, max_records: int = 0, dry_run: bool = False) -> int:
+def produce_records(producer: Producer | None, source: str, topic: str, max_records: int = 0, dry_run: bool = False, insecure: bool = False) -> int:
     if not source:
         raise RuntimeError("GDELT source is required; set GDELT_SOURCE or use --source")
     if not dry_run and producer is None:
@@ -209,7 +221,7 @@ def produce_records(producer: Producer | None, source: str, topic: str, max_reco
         if source.startswith("http://") or source.startswith("https://"):
             filename = os.path.basename(urlparse(source).path)
             source_path = os.path.join(tmpdir, filename)
-            source_path = download_source(source, source_path)
+            source_path = download_source(source, source_path, insecure=insecure)
 
         with open_input(source_path) as raw:
             reader = csv.reader(raw, delimiter="\t")
@@ -239,7 +251,14 @@ def produce_records(producer: Producer | None, source: str, topic: str, max_reco
     return sent
 
 
-def run_once(producer: Producer | None, sources: list[str], topic: str, max_records: int, dry_run: bool) -> None:
+def run_once(
+    producer: Producer | None,
+    sources: list[str],
+    topic: str,
+    max_records: int,
+    dry_run: bool,
+    insecure: bool,
+) -> None:
     logger.info("Running GDELT producer for %d sources into topic=%s", len(sources), topic)
     try:
         total = 0
@@ -253,6 +272,7 @@ def run_once(producer: Producer | None, sources: list[str], topic: str, max_reco
                 topic=topic,
                 max_records=remaining,
                 dry_run=dry_run,
+                insecure=insecure,
             )
             total += produced
         logger.info("Total produced %d records", total)
@@ -270,13 +290,21 @@ def main_loop(
     max_poll_count: int,
     max_records: int,
     dry_run: bool,
+    insecure: bool,
 ) -> None:
     if max_poll_count == 0:
         max_poll_count = 1
 
     poll_count = 0
     while True:
-        run_once(producer=producer, sources=sources, topic=topic, max_records=max_records, dry_run=dry_run)
+        run_once(
+            producer=producer,
+            sources=sources,
+            topic=topic,
+            max_records=max_records,
+            dry_run=dry_run,
+            insecure=insecure,
+        )
         poll_count += 1
         if max_poll_count and poll_count >= max_poll_count:
             logger.info("Reached max poll count %d, exiting", max_poll_count)
@@ -297,4 +325,5 @@ if __name__ == "__main__":
         max_poll_count=args.max_polls,
         max_records=args.max_records,
         dry_run=args.dry_run,
+        insecure=args.insecure,
     )
