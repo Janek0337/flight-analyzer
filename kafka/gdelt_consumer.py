@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from typing import Any, Dict, Optional
 
 from confluent_kafka import Consumer
@@ -15,6 +16,10 @@ from confluent_kafka import Consumer
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
 KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "gdelt_raw")
 KAFKA_GROUP_ID = os.getenv("KAFKA_GROUP_ID", "gdelt-events-consumer")
+ES_ENABLED = os.getenv("ES_ENABLED", "false").lower() in ("1", "true", "yes")
+ES_HOST = os.getenv("ES_HOST", "http://localhost:9200")
+ES_INDEX = os.getenv("ES_INDEX", "gdelt-events")
+ES_BATCH_SIZE = int(os.getenv("ES_BATCH_SIZE", "100"))
 
 
 def _decode_message(msg) -> Optional[Dict[str, Any]]:
@@ -55,7 +60,54 @@ def _format_event(record: Dict[str, Any]) -> str:
     return "[+] GDELT " + " ".join(details)
 
 
+def _create_es_client() -> Optional[Any]:
+    if not ES_ENABLED:
+        return None
+
+    try:
+        from elasticsearch import Elasticsearch
+    except ImportError:
+        raise RuntimeError(
+            "Elasticsearch support requires the 'elasticsearch' Python package. "
+            "Install it with pip install elasticsearch"
+        )
+
+    client = Elasticsearch(hosts=[ES_HOST])
+    if not client.ping():
+        raise RuntimeError(f"Cannot connect to Elasticsearch at {ES_HOST}")
+    return client
+
+
+def _prepare_document(record: Dict[str, Any]) -> Dict[str, Any]:
+    doc = {"indexed_at": int(time.time())}
+    if isinstance(record, dict):
+        doc.update(record)
+        if isinstance(doc.get("record"), dict):
+            inner = doc.pop("record")
+            doc.update(inner)
+    return doc
+
+
+def _document_id(doc: Dict[str, Any]) -> Optional[str]:
+    event_id = doc.get("GLOBALEVENTID")
+    return str(event_id) if event_id is not None else None
+
+
+def _index_to_elasticsearch(client: Any, doc: Dict[str, Any]) -> None:
+    try:
+        client.index(index=ES_INDEX, id=_document_id(doc), document=doc)
+    except Exception as exc:
+        print(f"[-] Failed to write document to Elasticsearch: {exc}")
+
+
 def main() -> int:
+    es_client = None
+    if ES_ENABLED:
+        print(f"[+] Elasticsearch enabled: {ES_HOST} index={ES_INDEX}")
+        es_client = _create_es_client()
+    else:
+        print("[+] Elasticsearch disabled; set ES_ENABLED=true to enable indexing")
+
     consumer = Consumer(
         {
             "bootstrap.servers": KAFKA_BOOTSTRAP,
@@ -84,6 +136,9 @@ def main() -> int:
                 continue
 
             print(_format_event(record))
+            if es_client is not None:
+                doc = _prepare_document(record)
+                _index_to_elasticsearch(es_client, doc)
     except KeyboardInterrupt:
         print("[+] Consumer stopped")
     finally:
