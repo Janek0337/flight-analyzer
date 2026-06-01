@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional
 
 from confluent_kafka import Consumer
 
-KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
+KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "10.198.188.55:9092")
 KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "gdelt_raw")
 KAFKA_GROUP_ID = os.getenv("KAFKA_GROUP_ID", "gdelt-events-consumer")
 ES_ENABLED = os.getenv("ES_ENABLED", "false").lower() in ("1", "true", "yes")
