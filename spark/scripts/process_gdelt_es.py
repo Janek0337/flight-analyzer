@@ -11,6 +11,9 @@ ES_INDEX = os.getenv("ES_INDEX", "gdelt_raw")
 ES_NODES_WAN_ONLY = os.getenv("ES_NODES_WAN_ONLY", "false").lower() in ("1", "true", "yes")
 START_DATE = os.getenv("GDELT_START_DATE", "20260101")
 END_DATE = os.getenv("GDELT_END_DATE", "20260120")
+ES_USER = os.getenv("ES_USER", "elastic")
+ES_PASSWORD = os.getenv("ES_PASSWORD", "")
+ES_USE_SSL = os.getenv("ES_USE_SSL", "false").lower() in ("1", "true", "yes")
 
 HDFS_BASE = os.getenv("HDFS_BASE", "hdfs://nn1:9000")
 OUTPUT_GDELT_DAILY_PATH = os.path.join(HDFS_BASE, "bigdata/flight_delay/processed/gdelt_daily")
@@ -30,6 +33,13 @@ es_options = {
 }
 if ES_NODES_WAN_ONLY:
     es_options["es.nodes.wan.only"] = "true"
+if ES_USER:
+    es_options["es.net.http.auth.user"] = ES_USER
+    es_options["es.net.http.auth.pass"] = ES_PASSWORD
+if ES_USE_SSL:
+    es_options["es.net.ssl"] = "true"
+    # Allow self-signed certs when connecting to HTTPS ES (use with caution)
+    es_options["es.net.ssl.cert.allow.self.signed"] = "true"
 
 print("Loading raw GDELT documents from Elasticsearch...")
 raw = spark.read.format("es").options(**es_options).load(ES_INDEX)
