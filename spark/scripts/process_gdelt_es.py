@@ -7,7 +7,7 @@ spark.sparkContext.setLogLevel("WARN")
 
 ES_HOST = os.getenv("ES_HOST", "localhost")
 ES_PORT = os.getenv("ES_PORT", "9200")
-ES_INDEX = os.getenv("ES_INDEX", "gdelt_raw")
+ES_INDEX = os.getenv("ES_INDEX", "gdelt-events")
 ES_NODES_WAN_ONLY = os.getenv("ES_NODES_WAN_ONLY", "false").lower() in ("1", "true", "yes")
 START_DATE = os.getenv("GDELT_START_DATE", "20260101")
 END_DATE = os.getenv("GDELT_END_DATE", "20260120")
