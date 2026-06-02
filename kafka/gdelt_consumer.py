@@ -113,10 +113,27 @@ def _document_id(doc: Dict[str, Any]) -> Optional[str]:
 
 
 def _index_to_elasticsearch(client: Any, doc: Dict[str, Any]) -> None:
-    try:
-        client.index(index=ES_INDEX, id=_document_id(doc), document=doc, request_timeout=ES_REQUEST_TIMEOUT)
-    except Exception as exc:
-        print(f"[-] Failed to write document to Elasticsearch: {exc}")
+    # Robust indexing with retries and exponential backoff
+    from elasticsearch import exceptions as es_exceptions
+
+    for attempt in range(1, ES_MAX_RETRIES + 1):
+        try:
+            client.index(index=ES_INDEX, id=_document_id(doc), document=doc, request_timeout=ES_REQUEST_TIMEOUT)
+            return
+        except Exception as exc:
+            # Prefer detailed exception info if available
+            exc_type = type(exc).__name__
+            print(f"[-] Attempt {attempt}/{ES_MAX_RETRIES} - Failed to write document to Elasticsearch: {exc_type}: {exc}")
+            # If this is a non-retryable error, break early
+            if isinstance(exc, (es_exceptions.RequestError, es_exceptions.AuthenticationException)):
+                print("[-] Non-retryable Elasticsearch error, aborting indexing for this document.")
+                break
+            if attempt < ES_MAX_RETRIES:
+                backoff = 2 ** (attempt - 1)
+                print(f"[-] Retrying in {backoff}s...")
+                time.sleep(backoff)
+            else:
+                print("[-] Exhausted retries; giving up on this document.")
 
 
 def main() -> int:
