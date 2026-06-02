@@ -209,7 +209,7 @@ def main() -> int:
             if record is None:
                 continue
 
-            #print(_format_event(record))
+            print(_format_event(record))
             if es_client is not None:
                 doc = _prepare_document(record)
                 # Use bulk indexing when ES_BATCH_SIZE > 1
