@@ -13,7 +13,7 @@ START_DATE = os.getenv("GDELT_START_DATE", "20260101")
 END_DATE = os.getenv("GDELT_END_DATE", "20260120")
 ES_USER = os.getenv("ES_USER", "elastic")
 ES_PASSWORD = os.getenv("ES_PASSWORD", "")
-ES_USE_SSL = os.getenv("ES_USE_SSL", "false").lower() in ("1", "true", "yes")
+ES_USE_SSL = os.getenv("ES_USE_SSL", "true").lower() in ("1", "true", "yes")
 
 HDFS_BASE = os.getenv("HDFS_BASE", "hdfs://nn1:9000")
 OUTPUT_GDELT_DAILY_PATH = os.path.join(HDFS_BASE, "bigdata/flight_delay/processed/gdelt_daily")
