@@ -22,6 +22,9 @@ ES_INDEX = os.getenv("ES_INDEX", "gdelt-events")
 ES_BATCH_SIZE = int(os.getenv("ES_BATCH_SIZE", "100"))
 ES_USER = os.getenv("ES_USER", "elastic")
 ES_PASSWORD = os.getenv("ES_PASSWORD", "")
+ES_MAX_RETRIES = int(os.getenv("ES_MAX_RETRIES", "5"))
+ES_REQUEST_TIMEOUT = int(os.getenv("ES_REQUEST_TIMEOUT", "30"))
+ES_RETRY_ON_TIMEOUT = os.getenv("ES_RETRY_ON_TIMEOUT", "true").lower() in ("1", "true", "yes")
 
 
 def _decode_message(msg) -> Optional[Dict[str, Any]]:
@@ -78,15 +81,19 @@ def _create_es_client() -> Optional[Any]:
     kwargs = {"hosts": [ES_HOST]}
     if ES_USER and ES_PASSWORD:
         kwargs["basic_auth"] = (ES_USER, ES_PASSWORD)
-    
+
     # For self-signed certificates, disable SSL verification
     if ES_HOST.startswith("https://"):
         kwargs["verify_certs"] = False
 
+    # Add retry/timeout behavior
+    kwargs["max_retries"] = ES_MAX_RETRIES
+    kwargs["retry_on_timeout"] = ES_RETRY_ON_TIMEOUT
+
     client = Elasticsearch(**kwargs)
     if not client.ping():
         raise RuntimeError(f"Cannot connect to Elasticsearch at {ES_HOST}")
-    print("Created an Elasticsearch connection")
+    print(f"Created an Elasticsearch connection (retries={ES_MAX_RETRIES}, retry_on_timeout={ES_RETRY_ON_TIMEOUT}, request_timeout={ES_REQUEST_TIMEOUT}s)")
     return client
 
 
@@ -107,7 +114,7 @@ def _document_id(doc: Dict[str, Any]) -> Optional[str]:
 
 def _index_to_elasticsearch(client: Any, doc: Dict[str, Any]) -> None:
     try:
-        client.index(index=ES_INDEX, id=_document_id(doc), document=doc)
+        client.index(index=ES_INDEX, id=_document_id(doc), document=doc, request_timeout=ES_REQUEST_TIMEOUT)
     except Exception as exc:
         print(f"[-] Failed to write document to Elasticsearch: {exc}")
 
