@@ -5,7 +5,7 @@ import os
 spark = SparkSession.builder.appName("GDELT Elasticsearch Processing").getOrCreate()
 spark.sparkContext.setLogLevel("WARN")
 
-ES_HOST = os.getenv("ES_HOST", "10.198.188.55")
+ES_HOST = os.getenv("ES_HOST", "localhost")
 ES_PORT = os.getenv("ES_PORT", "9200")
 ES_INDEX = os.getenv("ES_INDEX", "gdelt_raw")
 ES_NODES_WAN_ONLY = os.getenv("ES_NODES_WAN_ONLY", "false").lower() in ("1", "true", "yes")
