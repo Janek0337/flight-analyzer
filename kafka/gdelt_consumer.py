@@ -119,6 +119,8 @@ def _index_to_elasticsearch(client: Any, doc: Dict[str, Any]) -> None:
     for attempt in range(1, ES_MAX_RETRIES + 1):
         try:
             client.index(index=ES_INDEX, id=_document_id(doc), document=doc, request_timeout=ES_REQUEST_TIMEOUT)
+            doc_id = _document_id(doc)
+            print(f"[+] Indexed document to {ES_INDEX} id={doc_id}")
             return
         except Exception as exc:
             # Prefer detailed exception info if available
