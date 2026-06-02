@@ -54,8 +54,12 @@ raw_count = raw.count()
 print(f"Raw row count: {raw_count}")
 raw.cache()
 
-gdelt = raw.selectExpr("record.*")
-print("Expanded record fields from raw data")
+if "record" in raw.columns:
+    gdelt = raw.selectExpr("record.*")
+    print("Expanded record fields from raw data")
+else:
+    gdelt = raw
+    print("No nested record field found; using raw document fields directly")
 print(f"GDELT columns: {gdelt.columns}")
 
 gdelt_count = gdelt.count()
