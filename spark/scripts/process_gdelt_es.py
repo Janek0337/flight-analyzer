@@ -10,7 +10,7 @@ ES_PORT = os.getenv("ES_PORT", "9200")
 ES_INDEX = os.getenv("ES_INDEX", "gdelt_raw")
 ES_NODES_WAN_ONLY = os.getenv("ES_NODES_WAN_ONLY", "false").lower() in ("1", "true", "yes")
 START_DATE = os.getenv("GDELT_START_DATE", "20260101")
-END_DATE = os.getenv("GDELT_END_DATE", "")
+END_DATE = os.getenv("GDELT_END_DATE", "20260120")
 
 HDFS_BASE = os.getenv("HDFS_BASE", "hdfs://nn1:9000")
 OUTPUT_GDELT_DAILY_PATH = os.path.join(HDFS_BASE, "bigdata/flight_delay/processed/gdelt_daily")
@@ -91,7 +91,7 @@ gdelt_country_daily = gdelt.groupBy("date", "ActionGeo_CountryCode").agg(
 ).withColumnRenamed("ActionGeo_CountryCode", "action_country")
 
 print("Saving daily GDELT features...")
-gdelt_daily.write.mode("overwrite").parquet(OUTPUT_GDELT_DAILY_PATH)
+gdelt_daily.write.mode("append").parquet(OUTPUT_GDELT_DAILY_PATH)
 print("Saved daily GDELT features")
 print(f"Daily feature rows: {gdelt_daily.count()}")
 print("Saving daily GDELT country features...")
