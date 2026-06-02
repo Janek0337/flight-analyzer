@@ -14,6 +14,7 @@ END_DATE = os.getenv("GDELT_END_DATE", "20260120")
 ES_USER = os.getenv("ES_USER", "elastic")
 ES_PASSWORD = os.getenv("ES_PASSWORD", "")
 ES_USE_SSL = os.getenv("ES_USE_SSL", "true").lower() in ("1", "true", "yes")
+ES_INSECURE = os.getenv("ES_INSECURE", "true").lower() in ("1", "true", "yes")
 
 HDFS_BASE = os.getenv("HDFS_BASE", "hdfs://nn1:9000")
 OUTPUT_GDELT_DAILY_PATH = os.path.join(HDFS_BASE, "bigdata/flight_delay/processed/gdelt_daily")
@@ -38,8 +39,12 @@ if ES_USER:
     es_options["es.net.http.auth.pass"] = ES_PASSWORD
 if ES_USE_SSL:
     es_options["es.net.ssl"] = "true"
-    # Allow self-signed certs when connecting to HTTPS ES (use with caution)
-    es_options["es.net.ssl.cert.allow.self.signed"] = "true"
+    # For quick testing with self-signed certs or untrusted CA, set ES_INSECURE=true.
+    # This disables hostname verification and allows self-signed certs (INSECURE, testing only).
+    if ES_INSECURE:
+        es_options["es.net.ssl.cert.allow.self.signed"] = "true"
+        es_options["es.net.ssl.hostname.verification"] = "false"
+        print("[WARN] ES_INSECURE=true: hostname verification disabled and self-signed certs allowed")
 
 print("Loading raw GDELT documents from Elasticsearch...")
 raw = spark.read.format("es").options(**es_options).load(ES_INDEX)
