@@ -19,7 +19,7 @@ KAFKA_GROUP_ID = os.getenv("KAFKA_GROUP_ID", "gdelt-events-documents-consumer")
 ES_ENABLED = os.getenv("ES_ENABLED", "true").lower() in ("1", "true", "yes")
 ES_HOST = os.getenv("ES_HOST", "https://localhost:9200")
 ES_INDEX = os.getenv("ES_INDEX", "gdelt-events")
-ES_BATCH_SIZE = int(os.getenv("ES_BATCH_SIZE", "2000"))
+ES_BATCH_SIZE = int(os.getenv("ES_BATCH_SIZE", "5000"))
 ES_USER = os.getenv("ES_USER", "elastic")
 ES_PASSWORD = os.getenv("ES_PASSWORD", "")
 ES_MAX_RETRIES = int(os.getenv("ES_MAX_RETRIES", "5"))
@@ -209,7 +209,7 @@ def main() -> int:
             if record is None:
                 continue
 
-            print(_format_event(record))
+            #print(_format_event(record))
             if es_client is not None:
                 doc = _prepare_document(record)
                 # Use bulk indexing when ES_BATCH_SIZE > 1
