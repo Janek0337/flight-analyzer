@@ -20,6 +20,8 @@ ES_ENABLED = os.getenv("ES_ENABLED", "true").lower() in ("1", "true", "yes")
 ES_HOST = os.getenv("ES_HOST", "https://localhost:9200")
 ES_INDEX = os.getenv("ES_INDEX", "gdelt-events")
 ES_BATCH_SIZE = int(os.getenv("ES_BATCH_SIZE", "100"))
+ES_USER = os.getenv("ES_USER", "elastic")
+ES_PASSWORD = os.getenv("ES_PASSWORD", "")
 
 
 def _decode_message(msg) -> Optional[Dict[str, Any]]:
@@ -72,7 +74,16 @@ def _create_es_client() -> Optional[Any]:
             "Install it with pip install elasticsearch"
         )
 
-    client = Elasticsearch(hosts=[ES_HOST])
+    # Prepare connection parameters with authentication if provided
+    kwargs = {"hosts": [ES_HOST]}
+    if ES_USER and ES_PASSWORD:
+        kwargs["basic_auth"] = (ES_USER, ES_PASSWORD)
+    
+    # For self-signed certificates, disable SSL verification
+    if ES_HOST.startswith("https://"):
+        kwargs["verify_certs"] = False
+
+    client = Elasticsearch(**kwargs)
     if not client.ping():
         raise RuntimeError(f"Cannot connect to Elasticsearch at {ES_HOST}")
     return client
