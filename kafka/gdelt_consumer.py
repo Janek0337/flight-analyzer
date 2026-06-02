@@ -15,7 +15,7 @@ from confluent_kafka import Consumer
 
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "10.198.188.55:9092")
 KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "gdelt_raw")
-KAFKA_GROUP_ID = os.getenv("KAFKA_GROUP_ID", "gdelt-events-documents-consumer")
+KAFKA_GROUP_ID = os.getenv("KAFKA_GROUP_ID", "gdelt-events-consumer")
 ES_ENABLED = os.getenv("ES_ENABLED", "true").lower() in ("1", "true", "yes")
 ES_HOST = os.getenv("ES_HOST", "https://localhost:9200")
 ES_INDEX = os.getenv("ES_INDEX", "gdelt-events")
