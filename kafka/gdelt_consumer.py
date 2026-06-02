@@ -19,7 +19,7 @@ KAFKA_GROUP_ID = os.getenv("KAFKA_GROUP_ID", "gdelt-events-documents-consumer")
 ES_ENABLED = os.getenv("ES_ENABLED", "true").lower() in ("1", "true", "yes")
 ES_HOST = os.getenv("ES_HOST", "https://localhost:9200")
 ES_INDEX = os.getenv("ES_INDEX", "gdelt-events")
-ES_BATCH_SIZE = int(os.getenv("ES_BATCH_SIZE", "100"))
+ES_BATCH_SIZE = int(os.getenv("ES_BATCH_SIZE", "500"))
 ES_USER = os.getenv("ES_USER", "elastic")
 ES_PASSWORD = os.getenv("ES_PASSWORD", "")
 ES_MAX_RETRIES = int(os.getenv("ES_MAX_RETRIES", "5"))
@@ -138,6 +138,41 @@ def _index_to_elasticsearch(client: Any, doc: Dict[str, Any]) -> None:
                 print("[-] Exhausted retries; giving up on this document.")
 
 
+def _bulk_index_to_elasticsearch(client: Any, docs: list) -> None:
+    """Index a list of prepared documents using the bulk API with retries."""
+    try:
+        from elasticsearch import helpers, exceptions as es_exceptions
+    except ImportError:
+        print("[-] Elasticsearch helpers not available; bulk indexing disabled.")
+        return
+
+    actions = [
+        {"_op_type": "index", "_index": ES_INDEX, "_id": _document_id(d), "_source": d}
+        for d in docs
+    ]
+
+    for attempt in range(1, ES_MAX_RETRIES + 1):
+        try:
+            success_count, errors = helpers.bulk(client, actions, request_timeout=ES_REQUEST_TIMEOUT, raise_on_error=False)
+            failed = len(errors) if isinstance(errors, list) else 0
+            print(f"[+] Bulk indexed {success_count} docs to {ES_INDEX} (failed={failed})")
+            if failed:
+                print(f"[-] Bulk errors: {errors}")
+            return
+        except Exception as exc:
+            exc_type = type(exc).__name__
+            print(f"[-] Bulk attempt {attempt}/{ES_MAX_RETRIES} failed: {exc_type}: {exc}")
+            if isinstance(exc, (es_exceptions.RequestError, es_exceptions.AuthenticationException)):
+                print("[-] Non-retryable Elasticsearch error during bulk; aborting.")
+                break
+            if attempt < ES_MAX_RETRIES:
+                backoff = 2 ** (attempt - 1)
+                print(f"[-] Retrying bulk in {backoff}s...")
+                time.sleep(backoff)
+            else:
+                print("[-] Exhausted bulk retries; giving up on these documents.")
+
+
 def main() -> int:
     es_client = None
     if ES_ENABLED:
@@ -161,6 +196,7 @@ def main() -> int:
     print(f"[+] Consumer group: {KAFKA_GROUP_ID}")
 
     try:
+        batch: list[Dict[str, Any]] = []
         while True:
             msg = consumer.poll(1.0)
             if msg is None:
@@ -176,10 +212,24 @@ def main() -> int:
             print(_format_event(record))
             if es_client is not None:
                 doc = _prepare_document(record)
-                _index_to_elasticsearch(es_client, doc)
+                # Use bulk indexing when ES_BATCH_SIZE > 1
+                if ES_BATCH_SIZE > 1:
+                    batch.append(doc)
+                    if len(batch) >= ES_BATCH_SIZE:
+                        _bulk_index_to_elasticsearch(es_client, batch)
+                        batch.clear()
+                else:
+                    _index_to_elasticsearch(es_client, doc)
     except KeyboardInterrupt:
         print("[+] Consumer stopped")
     finally:
+        # Flush any remaining batched documents
+        try:
+            if es_client is not None and ES_BATCH_SIZE > 1 and batch:
+                print(f"[+] Flushing {len(batch)} remaining documents")
+                _bulk_index_to_elasticsearch(es_client, batch)
+        except Exception as exc:
+            print(f"[-] Error flushing remaining documents: {exc}")
         consumer.close()
 
     return 0
