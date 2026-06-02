@@ -31,14 +31,26 @@ es_options = {
 if ES_NODES_WAN_ONLY:
     es_options["es.nodes.wan.only"] = "true"
 
+print("Loading raw GDELT documents from Elasticsearch...")
 raw = spark.read.format("es").options(**es_options).load(ES_INDEX)
+print("Loaded raw Elasticsearch DataFrame")
+print(f"Raw columns: {raw.columns}")
+raw_count = raw.count()
+print(f"Raw row count: {raw_count}")
+raw.cache()
 
 gdelt = raw.selectExpr("record.*")
+print("Expanded record fields from raw data")
+print(f"GDELT columns: {gdelt.columns}")
+
+gdelt_count = gdelt.count()
+print(f"GDELT row count after record expansion: {gdelt_count}")
 
 if "SQLDATE" not in gdelt.columns:
     raise RuntimeError("Brak pola SQLDATE w danych GDELT. Sprawdź mapping indeksu Elasticsearch.")
 
 gdelt = gdelt.withColumn("date", to_date(col("SQLDATE"), "yyyyMMdd"))
+print("Converted SQLDATE to date column")
 
 if START_DATE:
     gdelt_start = to_date(lit(START_DATE), "yyyyMMdd")
@@ -47,7 +59,11 @@ if END_DATE:
     gdelt_end = to_date(lit(END_DATE), "yyyyMMdd")
     gdelt = gdelt.filter(col("date") <= gdelt_end)
 
+filtered_count = gdelt.count()
+print(f"Filtered GDELT rows in date range {START_DATE} - {END_DATE}: {filtered_count}")
+
 # Cechy agregowane dziennie.
+print("Starting daily aggregation for GDELT data...")
 gdelt_daily = gdelt.groupBy("date").agg(
     spark_sum(when(col("GLOBALEVENTID").isNotNull(), 1).otherwise(0)).alias("gdelt_event_count"),
     countDistinct(col("SOURCEURL")).alias("gdelt_unique_source_count"),
@@ -61,6 +77,7 @@ gdelt_daily = gdelt.groupBy("date").agg(
 )
 
 # Cechy dzienne agregowane po kraju akcji (ActionGeo_CountryCode).
+print("Starting country-level daily aggregation for GDELT data...")
 gdelt_country_daily = gdelt.groupBy("date", "ActionGeo_CountryCode").agg(
     spark_sum(when(col("GLOBALEVENTID").isNotNull(), 1).otherwise(0)).alias("gdelt_event_count"),
     countDistinct(col("SOURCEURL")).alias("gdelt_unique_source_count"),
@@ -75,8 +92,12 @@ gdelt_country_daily = gdelt.groupBy("date", "ActionGeo_CountryCode").agg(
 
 print("Saving daily GDELT features...")
 gdelt_daily.write.mode("overwrite").parquet(OUTPUT_GDELT_DAILY_PATH)
+print("Saved daily GDELT features")
+print(f"Daily feature rows: {gdelt_daily.count()}")
 print("Saving daily GDELT country features...")
 gdelt_country_daily.write.mode("overwrite").parquet(OUTPUT_GDELT_COUNTRY_PATH)
+print("Saved daily GDELT country features")
+print(f"Daily country feature rows: {gdelt_country_daily.count()}")
 
 print("END: Przetwarzanie GDELT z Elasticsearch")
 print("Saved:")
