@@ -77,7 +77,6 @@ def _create_es_client() -> Optional[Any]:
     # Prepare connection parameters with authentication if provided
     kwargs = {"hosts": [ES_HOST]}
     if ES_USER and ES_PASSWORD:
-        print(ES_PASSWORD)
         kwargs["basic_auth"] = (ES_USER, ES_PASSWORD)
     
     # For self-signed certificates, disable SSL verification
@@ -87,6 +86,7 @@ def _create_es_client() -> Optional[Any]:
     client = Elasticsearch(**kwargs)
     if not client.ping():
         raise RuntimeError(f"Cannot connect to Elasticsearch at {ES_HOST}")
+    print("Created an Elasticsearch connection")
     return client
 
 
