@@ -12,11 +12,13 @@ HDFS_BASE = "hdfs://nn1:9000"
 FLIGHTS_DAILY = HDFS_BASE + "/bigdata/flight_delay/processed/daily_delays"
 WEATHER_DAILY = HDFS_BASE + "/bigdata/flight_delay/processed/weather_daily"
 WEATHER_EUROPE_DAILY = HDFS_BASE + "/bigdata/flight_delay/processed/weather_europe_daily"
+GDELT_DAILY = HDFS_BASE + "/bigdata/flight_delay/processed/gdelt_daily"
 OUTPUT_FEATURES = HDFS_BASE + "/bigdata/flight_delay/processed/features/daily_features_parquet"
 
 print("START: Budowa lokalnych features")
 print(f"Flights: {FLIGHTS_DAILY}")
 print(f"Weather local: {WEATHER_DAILY}")
+print(f"GDELT daily: {GDELT_DAILY}")
 
 flights = spark.read.parquet(FLIGHTS_DAILY)
 weather = spark.read.parquet(WEATHER_DAILY)
@@ -123,6 +125,23 @@ features = features.withColumn(
     .when(col("weather_station_icao").isNotNull(), lit("station_missing_weather"))
     .otherwise(lit("europe_fallback")),
 )
+
+gdelt_daily = spark.read.parquet(GDELT_DAILY)
+if "date" not in gdelt_daily.columns:
+    raise RuntimeError("GDELT daily input must contain 'date' column")
+
+gdelt_daily = gdelt_daily.dropDuplicates(["date"])
+features = features.join(gdelt_daily, "date", "left")
+
+features = features.withColumn("gdelt_event_count", coalesce(col("gdelt_event_count"), lit(0)))
+features = features.withColumn("gdelt_unique_source_count", coalesce(col("gdelt_unique_source_count"), lit(0)))
+features = features.withColumn("gdelt_total_mentions", coalesce(col("gdelt_total_mentions"), lit(0)))
+features = features.withColumn("gdelt_total_sources", coalesce(col("gdelt_total_sources"), lit(0)))
+features = features.withColumn("gdelt_total_articles", coalesce(col("gdelt_total_articles"), lit(0)))
+features = features.withColumn("gdelt_avg_goldstein", coalesce(col("gdelt_avg_goldstein"), lit(0.0)))
+features = features.withColumn("gdelt_avg_tone", coalesce(col("gdelt_avg_tone"), lit(0.0)))
+features = features.withColumn("gdelt_conflict_event_count", coalesce(col("gdelt_conflict_event_count"), lit(0)))
+features = features.withColumn("gdelt_protest_event_count", coalesce(col("gdelt_protest_event_count"), lit(0)))
 
 # Fallback europejski zostaje tylko po to, żeby pipeline nie tracił wierszy. Model
 # dostaje flagę `weather_match_level`, więc widać, które rekordy są mniej precyzyjne.
